@@ -1,7 +1,7 @@
 import pandas as pd
 
 def create_train_test_orders(orders):
-    train = orders.sample(frac=0.98,random_state=200)
+    train = orders.sample(frac=0.70,random_state=200)
     test = orders.drop(train.index)
     return train, test
 
