@@ -129,12 +129,3 @@ dmypy.json
 .pyre/
 
 
-data/raw/*
-!data/raw/.gitignore
-!data/raw/stub.txt
-data/temp/*
-!data/temp/.gitignore
-!data/temp/stub.txt
-data/out/*
-!data/out/.gitignore
-!data/out/stub.txt
