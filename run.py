@@ -3,6 +3,7 @@ import src.Clean as Clean
 import src.Model as Model
 import src.SecretaryMethod as SecretaryMethod 
 import os
+import pandas as pd
     
 def main_test(path_folder = "../../test/test-data/"):
     offers = pd.read_csv(os.path.join(path_folder,"offer_acceptance_offers.csv"),low_memory=False)
