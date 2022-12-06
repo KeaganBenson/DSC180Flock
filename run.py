@@ -5,8 +5,8 @@ import src.SecretaryMethod as SecretaryMethod
 import os
     
 def main_test(path_folder = "../../test/test-data/"):
-    offers = pd.read_csv("offer_acceptance_offers.csv",low_memory=False)
-    orders = pd.read_csv('offer_acceptance_orders.csv',low_memory=False)
+    offers = pd.read_csv(os.path.join(path_folder,"offer_acceptance_offers.csv"),low_memory=False)
+    orders = pd.read_csv(os.path.join(path_folder,'offer_acceptance_orders.csv'),low_memory=False)
     orders = Clean.clean_orders(orders)
     offers = Clean.clean_offers(offers)
     train,test = Clean.create_train_test_orders(orders)
