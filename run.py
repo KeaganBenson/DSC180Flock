@@ -34,6 +34,7 @@ def main_test(path_folder = "../../test/test-data/"):
     testDF = Model.PrepareTestSet(test,NUMBER_OFFERSModel,x,'EstimatedNumOffs')
     results = SecretaryMethod.runSecretaryMethod(testDF['REFERENCE_NUMBER'],testDF,offers)
     final = SecretaryMethod.createFinalDF(offers,results)
+    print(final[‘Difference’].mean())
     return final
 
 def main(targets):
