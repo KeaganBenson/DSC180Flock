@@ -59,6 +59,10 @@ class Metro_Cluster:
         assert cluster_method in ["kmeans","dbscan"]
         # df should have 3 columns. X, Y, and a 3rd dimension for density
         # and X and Y should form a superkey
+        
+        value_column_name = list(set(list(df.columns)).difference({x_column_name,y_column_name}))[0]
+        self.value_column_name = value_column_name
+        
         if cluster_method == "kmeans":
             np.random.seed(5)
             clusterer = KMeans(group_amount).fit(df)
@@ -84,8 +88,10 @@ class Metro_Cluster:
                     c=self.df[self.group_column_name],s=10,alpha=0.5,cmap="hsv")
         plt.title("Regions as Clusters")
     def build_cluster_df(
-        self
+        self,
+        centroid_as_metro = False
     ):
+        
         cluster_df = (
             self.df
             .groupby([self.group_column_name],as_index=False)
@@ -93,13 +99,43 @@ class Metro_Cluster:
                   self.y_column_name: np.mean})
         )
         self.cluster_df = cluster_df
+        centroid_x_column_name = self.cluster_df[self.x_column_name]
+        centroid_y_column_name = self.cluster_df[self.y_column_name]
+        self.centroid_y_column_name = centroid_y_column_name
+        self.centroid_x_column_name = centroid_x_column_name
+        self.cluster_df[centroid_x_column_name] = centroid_x_column_name
+        self.cluster_df[centroid_y_column_name] = centroid_y_column_name
         
-        plt.scatter(self.df[self.x_column_name], 
-                    self.df[self.y_column_name],
-                    c=self.df[self.group_column_name],s=10,alpha=0.5,cmap="hsv")
+        if centroid_as_metro == True:
+            # if centroid as metro is true,
+            # then re-write the centroid not as the centerpoint of the cluster, but the most active zipcode (aka city)
+            
+            self.cluster_df.sort_values(self.group_column_name,inplace=True)
+            temp_df = self.df.sort_values(self.value_column_name, ascending=False)
+            temp_df = temp_df.drop_duplicates(subset=[self.group_column_name])
+            temp_df.sort_values(self.group_column_name,inplace=True)
+            #print(temp_df[self.x_column_name])
+            #print(temp_df[self.y_column_name])
+            temp_df_x_column = temp_df[self.x_column_name]
+            temp_df_y_column = temp_df[self.y_column_name]
+
+            #print("done")
+            #print(list(temp_df[self.group_column_name]), list(self.cluster_df[self.group_column_name]))
+            assert (list(temp_df[self.group_column_name]) == list(self.cluster_df[self.group_column_name]))
+            
+            self.cluster_df[self.x_column_name] = temp_df_x_column.values
+            self.cluster_df[self.y_column_name] = temp_df_y_column.values
+        #print(self.cluster_df[self.x_column_name])
+        #print(self.cluster_df[self.y_column_name])
+            
+        
+        #plt.scatter(self.df[self.x_column_name], 
+        #            self.df[self.y_column_name],
+        #            c=self.df[self.group_column_name],s=10,alpha=0.5,cmap="hsv")
         plt.scatter(self.cluster_df[self.x_column_name], 
                     self.cluster_df[self.y_column_name],
                     edgecolors='black')
+        #assert False
         return cluster_df
 
     def build_opt_pivot(
@@ -406,7 +442,7 @@ def temp_build_metro_cluster(oa):
     density_adjuster = 10
     zipcode_density["ORDER_OFFER_AMOUNT"] = zipcode_density["ORDER_OFFER_AMOUNT"].apply(np.log1p)/density_adjuster
     metro_cluster = Metro_Cluster(zipcode_density,"X_COORD_DEST","Y_COORD_DEST",cluster_method="kmeans")
-    metro_cluster.build_cluster_df()
+    metro_cluster.build_cluster_df(centroid_as_metro=False)
     metro_cluster.build_opt_pivot()
     return metro_cluster
 
