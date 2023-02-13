@@ -1,5 +1,7 @@
 # DSC180Flock
 
+This project's model comprises of 3 sub-models (predicting average, amount, and standard deviation) that are used for an algorithm at the end
+
 Targets supported:
 * **data** - performs the ETL that extracts data from online, and fills the empty data/raw folder with the raw data
 * **features** - performs the data-cleaning and feature engineering for the intermediate data in data/temp folder and final data in data/out folder
