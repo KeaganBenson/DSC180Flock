@@ -39,7 +39,8 @@ from sklearn.linear_model import Ridge
 from sklearn.tree import DecisionTreeRegressor
 
 #path_folder = os.getcwd()
-def dataclean(path_folder = "../../"):
+def dataclean(path_folder = "../../", file_name="temp_avg_stdev.csv"):
+    file_name_temp_avg_stdev = file_name
     path_folder_data = os.path.join(path_folder, "data")
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
     path_folder_data_temp = os.path.join(path_folder_data,"temp")
@@ -375,13 +376,13 @@ def dataclean(path_folder = "../../"):
     )
     # writing output file
 
-    file_name_temp_avg_stdev = "temp_avg_stdev.csv"
     path_file_temp_avg_stdev = os.path.join(path_folder_data_temp, file_name_temp_avg_stdev)
     output_df.to_csv(path_file_temp_avg_stdev,index=False)
     return output_df
 def main(args):
     path_folder = args["path_folder"]
-    output_df = dataclean(path_folder)
+    file_name = args["file_name_temp_avg_stdev"]
+    output_df = dataclean(path_folder, file_name)
 
 # added ftl removal and leadtime toggle
 # - no ftl_only, no leadtime = avg=84%, num=60% stdev=67%
