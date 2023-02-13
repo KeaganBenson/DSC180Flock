@@ -379,7 +379,8 @@ def dataclean(path_folder = "../../"):
     path_file_temp_avg_stdev = os.path.join(path_folder_data_temp, file_name_temp_avg_stdev)
     output_df.to_csv(path_file_temp_avg_stdev,index=False)
     return output_df
-def main(path_folder = "../../"):
+def main(args):
+    path_folder = args["path_folder"]
     output_df = dataclean(path_folder)
 
 # added ftl removal and leadtime toggle
