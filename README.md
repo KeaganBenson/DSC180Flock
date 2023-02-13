@@ -9,4 +9,4 @@ Targets supported:
 * **clear** - empties the data folders raw, temp, and out
 * **all** - complete cycle of ETL, data preparation (cleaning, feature engineering), training, and prediction. Equivalent of "python run.py data features model". 
 * **test-data**: all subsequent arguments will be using only the test-data folder, not the data folder.
-* **test** - complete cycle but only on the "test data". Equivalent of "python run.py test-data clear data feature model"
+* **test** - complete cycle but only on the "test data". Equivalent of "python run.py test-data clear feature model"
