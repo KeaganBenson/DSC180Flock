@@ -7,7 +7,7 @@
 import sys
 import src.dataclean.build_features as features
 import src.etl.create_test_data as create_test_data
-#import src.etl.make_dataset as etl
+import src.etl.make_dataset as etl
 import src.models.model as model
 import os
 
