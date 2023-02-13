@@ -32,7 +32,7 @@ def build_features(args):
     path_folder = args["path_folder"]
     path_folder_data = os.path.join(path_folder, "data")
     path_folder_data_temp = os.path.join(path_folder_data, "temp")
-    path_folder_data_final = os.path.join(path_folder_data, "final")
+    path_folder_data_final = os.path.join(path_folder_data, "out")
 
 
     file_name_temp_avg_stdev = args["file_name_temp_avg_stdev"]
@@ -48,7 +48,7 @@ def build_features(args):
     temp_amount = pd.read_csv(path_file_temp_amount)
 
     final_df = temp_amount.merge(temp_avg_stdev, on=[temp_foreign_key_column_name])
-    path_folder_data_final = os.path.join(path_folder_data, "final")
+    path_folder_data_final = os.path.join(path_folder_data, "out")
     final_df.to_csv(path_folder_data_final, "file_name_final_df")
     return final_df
 
