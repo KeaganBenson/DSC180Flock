@@ -9,7 +9,9 @@ from . import etl_offer_acceptances
 from . import etl_zipcode
 
 
-def main(path_folder = "../../"):
+def main(args):
+    #path_folder = "../../"
+    path_folder = args["path_folder"]
     path_folder_data = os.path.join(path_folder, "data")
     path_folder_data_raw = os.path.join(path_folder_data, "raw")
     etl_zipcode.main(path_folder_data_raw)
