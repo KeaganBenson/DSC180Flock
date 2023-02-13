@@ -19,11 +19,11 @@ from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings("ignore")
 
-path_folder = "../../"
-import sys
-sys.path.insert(0, path_folder+"/src/"#+features/"
-                )
-import util
+#path_folder = "../../"
+#import sys
+#sys.path.insert(0, path_folder+"/src/"#+features/"
+#                )
+from . import util
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
@@ -39,30 +39,28 @@ from sklearn.linear_model import Ridge
 from sklearn.tree import DecisionTreeRegressor
 
 #path_folder = os.getcwd()
-def dataclean(path_folder = "../../", file_name="temp_avg_stdev.csv"):
+def dataclean(path_folder_data = "../../data", file_name="temp_avg_stdev.csv"):
     file_name_temp_avg_stdev = file_name
-    path_folder_data = os.path.join(path_folder, "data")
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
     path_folder_data_temp = os.path.join(path_folder_data,"temp")
-    path_folder_data_final = os.path.join(path_folder_data,"final")
 
     file_name_oa_offers = "offer_acceptance_offers.csv"
     path_file_oa_offers = os.path.join(path_folder_data_raw, file_name_oa_offers)
     oa_offers = pd.read_csv(path_file_oa_offers)
     print("Loaded offers df")
-    print(oa_offers.shape)
+    #print(oa_offers.shape)
 
     file_name_oa_orders = "offer_acceptance_orders.csv"
     path_file_oa_orders = os.path.join(path_folder_data_raw, file_name_oa_orders)
     oa_orders = pd.read_csv(path_file_oa_orders)
     print("Loaded orders df")
-    print(oa_orders.shape)
+    #print(oa_orders.shape)
 
     file_name_zipcode_coordinates = "zipcode_coordinates.csv"
     path_file_zipcode_coordinates = os.path.join(path_folder_data_raw, file_name_zipcode_coordinates)
     zipcode_coordinates = pd.read_csv(path_file_zipcode_coordinates)
     print("Loaded zipcodes df")
-    print(zipcode_coordinates.shape)
+    #print(zipcode_coordinates.shape)
 
     ## Data Cleaning
 
@@ -102,8 +100,24 @@ def dataclean(path_folder = "../../", file_name="temp_avg_stdev.csv"):
 
     zipcode_coordinates["X_COORD"] /= 1.0e6
     zipcode_coordinates["Y_COORD"] /= 1.0e6
-    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
+    
+    zipcode_coordinates["3DIGIT_ZIP"] = pd.to_numeric(zipcode_coordinates["3DIGIT_ZIP"], errors='coerce')
+    zipcode_coordinates.dropna(subset=["3DIGIT_ZIP"], inplace=True)    
+    oa_orders["ORIGIN_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["ORIGIN_3DIGIT_ZIP"], errors='coerce')
+    oa_orders.dropna(subset=["ORIGIN_3DIGIT_ZIP"], inplace=True)
+    oa_orders["DESTINATION_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["DESTINATION_3DIGIT_ZIP"], errors='coerce')
+    oa_orders.dropna(subset=["DESTINATION_3DIGIT_ZIP"], inplace=True)
+    
+    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int)
+    oa_orders["DESTINATION_3DIGIT_ZIP"] = oa_orders["DESTINATION_3DIGIT_ZIP"].astype(int)
+    oa_orders["ORIGIN_3DIGIT_ZIP"] = oa_orders["ORIGIN_3DIGIT_ZIP"].astype(int)
+    
+    #print(zipcode_coordinates["3DIGIT_ZIP"])
+    #print(oa_orders["ORIGIN_3DIGIT_ZIP"])
+    #print(oa_orders["DESTINATION_3DIGIT_ZIP"])
 
+    
+    
     oa_orders = (
         oa_orders
         .merge(zipcode_coordinates, left_on=["DESTINATION_3DIGIT_ZIP"], right_on=["3DIGIT_ZIP"])
@@ -234,6 +248,7 @@ def dataclean(path_folder = "../../", file_name="temp_avg_stdev.csv"):
     assert ((oa_orders.shape[0] == oa_orders_exploded.shape[0]))
     assert (type(oa_orders_exploded["REFERENCE_NUMBERS"].values[0]) == str)
     #print("oa_orders_exploded[REFERENCE_NUMBERS].values[0] is", oa_orders_exploded["REFERENCE_NUMBERS"].values[0])
+    print("All Assertion Tests Passed Successfully")
 
     # finally merging oa_offers and oa_orders
     foreign_key_column_name = "REFERENCE_NUMBERS"
@@ -380,9 +395,9 @@ def dataclean(path_folder = "../../", file_name="temp_avg_stdev.csv"):
     output_df.to_csv(path_file_temp_avg_stdev,index=False)
     return output_df
 def main(args):
-    path_folder = args["path_folder"]
+    path_folder_data = args["path_folder_data"]
     file_name = args["file_name_temp_avg_stdev"]
-    output_df = dataclean(path_folder, file_name)
+    output_df = dataclean(path_folder_data, file_name)
 
 # added ftl removal and leadtime toggle
 # - no ftl_only, no leadtime = avg=84%, num=60% stdev=67%

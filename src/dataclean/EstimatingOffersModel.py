@@ -5,9 +5,9 @@
 
 
 import os
-path_folder = "../../"
-import sys
-sys.path.insert(0, path_folder+"/src/")
+#path_folder = "../../"
+#import sys
+#sys.path.insert(0, path_folder+"/src/")
 
 
 
@@ -121,11 +121,10 @@ def estimating_offers_model(path_file_offers, path_file_orders):
     return reg, joinedDF[bool_column_names + numerical_loggable_column_names]
 
 def main(args):
-    path_folder = args["path_folder"]
+    path_folder_data = args["path_folder_data"]
     #file_name_temp_amount = args["file_name_temp_amount"]
     #file_name_output_df = "temp_amount.csv"
 
-    path_folder_data = os.path.join(path_folder, "data")
     path_folder_data_raw = os.path.join(path_folder_data, "raw")
     path_file_orders = os.path.join(path_folder_data_raw, "offer_acceptance_orders.csv")
     path_file_offers = os.path.join(path_folder_data_raw, "offer_acceptance_offers.csv")
@@ -145,15 +144,11 @@ def main(args):
     file_name_output_df = "temp_amount.csv"
     path_file_output_df = os.path.join(path_folder_data, "temp", file_name_output_df)
     output_df.to_csv(path_file_output_df, index=False)
+    
+    return output_df
 
 
 # In[3]:
-
-
-main({
-    "path_folder": "../../"
-})
-
 
 # In[ ]:
 
