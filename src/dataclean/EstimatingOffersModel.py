@@ -72,19 +72,21 @@ def createWeightVector(orders,offers):
     dates['offerHours'] = dates['CREATED_ON_HQ'].dt.hour - 5
     dates['leadHours'] = (dates['Lead_B_days'] - 2)*16 + dates['orderHours'] + dates['pickupHours']
     dates['OfferOrderHours'] = (dates['Offer_B_days'] - 2)*16 + dates['orderHours'] + dates['offerHours']
-    return dates['OfferOrderHours']/dates['leadHours']
+    dates['Weight'] = dates['OfferOrderHours']/dates['leadHours']
+    return dates['Weight']
 
 def estimating_offers_model(path_file_offers, path_file_orders):
     df = estimating_offers_clean(path_file_offers, path_file_orders)
     orders = df[0]
     offers = df[1]
+    ftl = orders[orders['TRANSPORT_MODE']=='FTL']
 
-    weightVector = createWeightVector(orders,offers)
+    weightVector = createWeightVector(ftl,offers)
 
-    full = orders.set_index('REFERENCE_NUMBER').join(offers.set_index('REFERENCE_NUMBER'),how = 'inner')
+    full = ftl.set_index('REFERENCE_NUMBER').join(offers.set_index('REFERENCE_NUMBER'),how = 'inner')
     full['NumberOffers'] = 1
     num_offer = full.groupby('REFERENCE_NUMBER').count()['NumberOffers'].clip(upper=20)
-    new = orders.set_index('REFERENCE_NUMBER').join(weightVector,how='inner').join(num_offer,how='inner')
+    new = ftl.set_index('REFERENCE_NUMBER').join(weightVector,how='inner').join(num_offer,how='inner')
     new = new[new['Weight'] > 0]
     new = new[new['Weight'] < 1].copy()
 
