@@ -16,42 +16,22 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 
-def estimating_offers_model(path_file_offers, path_file_orders):
-    pd.options.display.max_columns = 31
-
-    #path_file_orders is the file path for the orders data
-    #path_file_offers is the file path for the offers data
-
+def estimating_offers_clean(path_file_offers, path_file_orders):
     offers = pd.read_csv(path_file_offers,low_memory=False)
     orders = pd.read_csv(path_file_orders,low_memory=False)
-
-    # variables used for modeling
-    bool_column_names = [
-     'FD_ENABLED',
-     'EXCLUSIVE_USE_REQUESTED',
-     'HAZARDOUS',
-     'REEFER_ALLOWED',
-     'STRAIGHT_TRUCK_ALLOWED',
-     'LOAD_TO_RIDE_REQUESTED',
-    ]
-
-    numerical_loggable_column_names = [
-     'APPROXIMATE_DRIVING_ROUTE_MILEAGE',
-     'PALLETIZED_LINEAR_FEET',
-     'SECONDS_BETWEEN_ORDER_AND_DEADLINE',
-     'LOAD_BAR_COUNT',
-     'ESTIMATED_COST_AT_ORDER'
-    ]
-
     # dates -> DT & creating new time delta variable
     orders['ORDER_DATETIME_PST'] = pd.to_datetime(orders['ORDER_DATETIME_PST'])
     orders['PICKUP_DEADLINE_PST'] = pd.to_datetime(orders['PICKUP_DEADLINE_PST'])
     offers['CREATED_ON_HQ'] = pd.to_datetime(offers['CREATED_ON_HQ'])
     orders['Time_between_Order_pickup'] = (orders['PICKUP_DEADLINE_PST'] - 
                                                     orders['ORDER_DATETIME_PST'])
+    orders['SECONDS_BETWEEN_ORDER_AND_DEADLINE'] = orders['Time_between_Order_pickup'].dt.total_seconds()
 
     # fill driving distance with mean of in zip code results, most na were in zip code
     same = orders[orders['ORIGIN_3DIGIT_ZIP'] ==  orders['DESTINATION_3DIGIT_ZIP']]
@@ -70,55 +50,88 @@ def estimating_offers_model(path_file_offers, path_file_orders):
         if value:
             if orders[key].unique().sum() == 1:
                 orders[key] = orders[key].astype(bool)
+    return [orders,offers]
 
-    s = offers.groupby('REFERENCE_NUMBER').count()['CARRIER_ID']
-    nOffers_rec = s[s < 15]
+def calc_business_days(row):
+    lead = pd.bdate_range(start=row['OrderDate'], end=row['PickupDate'])
+    offer = pd.bdate_range(start=row['OrderDate'], end=row['OfferDate'])
+    return len(lead),len(offer)
 
-    ftl = orders[orders['TRANSPORT_MODE'] == 'FTL']
-    ftl.set_index('REFERENCE_NUMBER',inplace = True)
-    joinedDF = ftl.join(nOffers_rec,how = 'left')
-    joinedDF['NUMBER_OFFERS'] = joinedDF['CARRIER_ID'].fillna(0)
-    joinedDF.drop('CARRIER_ID',axis = 1,inplace = True)
-    joinedDF['SECONDS_BETWEEN_ORDER_AND_DEADLINE'] = joinedDF['Time_between_Order_pickup'].dt.total_seconds()
+def createWeightVector(orders,offers):
+    acc = offers.set_index('REFERENCE_NUMBER')
+    acc = acc[acc['LOAD_DELIVERED_FROM_OFFER']]
+    full2 = orders.set_index('REFERENCE_NUMBER').join(acc,how = 'inner')
+    dates = full2[['ORDER_DATETIME_PST','PICKUP_DEADLINE_PST','CREATED_ON_HQ']].copy()
+    dates['OrderDate'] =dates['ORDER_DATETIME_PST'].dt.date
+    dates['PickupDate'] = dates['PICKUP_DEADLINE_PST'].dt.date
+    dates['OfferDate'] = dates['CREATED_ON_HQ'].dt.date
+    s = dates.apply(calc_business_days, axis=1)
+    dates[['Lead_B_days', 'Offer_B_days']] = s.apply(lambda x: pd.Series([x[0], x[1]]))
+    dates['orderHours'] = 21 - dates['ORDER_DATETIME_PST'].dt.hour
+    dates['pickupHours'] = dates['PICKUP_DEADLINE_PST'].dt.hour - 7
+    dates['offerHours'] = dates['CREATED_ON_HQ'].dt.hour - 5
+    dates['leadHours'] = (dates['Lead_B_days'] - 2)*16 + dates['orderHours'] + dates['pickupHours']
+    dates['OfferOrderHours'] = (dates['Offer_B_days'] - 2)*16 + dates['orderHours'] + dates['offerHours']
+    return dates['OfferOrderHours']/dates['leadHours']
 
-    accept_offers = offers[offers['LOAD_DELIVERED_FROM_OFFER'] == True]
+def estimating_offers_model(path_file_offers, path_file_orders):
+    df = estimating_offers_clean(path_file_offers, path_file_orders)
+    orders = df[0]
+    offers = df[1]
 
-    joined_oo = pd.merge(accept_offers, orders, how='inner')
+    weightVector = createWeightVector(orders,offers)
 
-    joined_oo['LEAD_TIME'] =  joined_oo['PICKUP_DEADLINE_PST'] - joined_oo['CREATED_ON_HQ']
+    full = orders.set_index('REFERENCE_NUMBER').join(offers.set_index('REFERENCE_NUMBER'),how = 'inner')
+    full['NumberOffers'] = 1
+    num_offer = full.groupby('REFERENCE_NUMBER').count()['NumberOffers'].clip(upper=20)
+    new = orders.set_index('REFERENCE_NUMBER').join(weightVector,how='inner').join(num_offer,how='inner')
+    new = new[new['Weight'] > 0]
+    new = new[new['Weight'] < 1].copy()
 
-    #joined table of both ftl/ptl offers that are accepeted, column LEAD_TIME is time between accpt offr and pickupdeadline
-    joined_oo['LEAD_TIME'].describe()
+    bool_column_names = [
+        'FD_ENABLED',
+        'EXCLUSIVE_USE_REQUESTED',
+        'HAZARDOUS',
+        'REEFER_ALLOWED',
+        'STRAIGHT_TRUCK_ALLOWED',
+        'LOAD_TO_RIDE_REQUESTED'
+    ]
+    numerical_column_names = [
+        'APPROXIMATE_DRIVING_ROUTE_MILEAGE',
+        'PALLETIZED_LINEAR_FEET',
+        'SECONDS_BETWEEN_ORDER_AND_DEADLINE',
+        'LOAD_BAR_COUNT',
+        'ESTIMATED_COST_AT_ORDER',
+    ]
+    cat_column = [
+        'DELIVERY_TIME_CONSTRAINT',
+        'ORIGIN_3DIGIT_ZIP',
+        'DESTINATION_3DIGIT_ZIP',
+    ]
+    X_train, X_test, y_train, y_test = train_test_split(new.loc[:,new.columns!='NumberOffers'], new['NumberOffers'], test_size=0.2, random_state=42)
+    # Create a preprocessor to scale numerical features and one hot encode categorical features
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('cat', OneHotEncoder(handle_unknown='ignore'), cat_column),
+            ('num', StandardScaler(), numerical_column_names),
+            ('bool','passthrough',bool_column_names),
+            ])
 
-    def bin_leadtime(df):
-        if df['LEAD_TIME'] >= (df.quantile(q=0.75)['LEAD_TIME']).astype('dateime'):
-            return 4
-        elif df['LEAD_TIME'] >= (df.quantile(q=0.5)['LEAD_TIME']).astype('dateime'):
-            return 3
-        elif df['LEAD_TIME'] >= (df.quantile(q=0.25)['LEAD_TIME']).astype('dateime'):
-            return 2
-        return 1
+    # Fit the column transformer to the training data
+    preprocessor.fit(X_train)
 
-    # somethings wrong with these 2 lines
-    #joined_oo['LEADTIME_BIN'] = joined_oo.apply(bin_leadtime, axis=1)
-    #joined_oo.quantile(q=0.75)
-    print("joined_oo.apply(bin_leadtime, axis=1) runs into an error; running bin_leadtime will be skipped")
+    # Transform the training and testing data using the column transformer
+    X_train_transformed = preprocessor.transform(X_train)
+    X_test_transformed = preprocessor.transform(X_test)
 
-    train=joinedDF.sample(frac=0.8,random_state=200)
-    test=joinedDF.drop(train.index)
+    # Train a logistic regression model using the transformed data
+    model = LinearRegression()
+    model.fit(X_train_transformed, y_train,sample_weight = X_train['Weight'])
 
-    bool_column_names + numerical_loggable_column_names
+    y_pred = model.predict(X_test_transformed).round()
+    mean_absolute_error(y_test,y_pred)
 
-    xTrain = train[bool_column_names + numerical_loggable_column_names].to_numpy()
-    yTrain = train['NUMBER_OFFERS'].to_numpy()
-    xTest = test[bool_column_names + numerical_loggable_column_names].to_numpy()
-    yTest = test['NUMBER_OFFERS'].to_numpy()
-
-    reg = LinearRegression().fit(xTrain, yTrain)
-    preds = reg.predict(xTest).round()
-    mean_absolute_error(yTest,preds)
-
-    return reg, joinedDF[bool_column_names + numerical_loggable_column_names]
+    return model, new[bool_column_names + numerical_column_names + cat_column]
 
 def main(args):
     path_folder_data = args["path_folder_data"]
