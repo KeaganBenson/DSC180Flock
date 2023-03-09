@@ -57,6 +57,7 @@ def calc_business_days(row):
     offer = pd.bdate_range(start=row['OrderDate'], end=row['OfferDate'])
     return len(lead),len(offer)
 
+
 def createWeightVector(orders,offers):
     acc = offers.set_index('REFERENCE_NUMBER')
     acc = acc[acc['LOAD_DELIVERED_FROM_OFFER']]
@@ -67,19 +68,20 @@ def createWeightVector(orders,offers):
     dates['OfferDate'] = dates['CREATED_ON_HQ'].dt.date
     s = dates.apply(calc_business_days, axis=1)
     dates[['Lead_B_days', 'Offer_B_days']] = s.apply(lambda x: pd.Series([x[0], x[1]]))
-    dates['orderHours'] = 21 - dates['ORDER_DATETIME_PST'].dt.hour
-    dates['pickupHours'] = dates['PICKUP_DEADLINE_PST'].dt.hour - 7
-    dates['offerHours'] = dates['CREATED_ON_HQ'].dt.hour - 5
-    dates['leadHours'] = (dates['Lead_B_days'] - 2)*16 + dates['orderHours'] + dates['pickupHours']
-    dates['OfferOrderHours'] = (dates['Offer_B_days'] - 2)*16 + dates['orderHours'] + dates['offerHours']
-    dates['Weight'] = dates['OfferOrderHours']/dates['leadHours']
+    orderh = 21 - dates['ORDER_DATETIME_PST'].dt.hour
+    puh = dates['PICKUP_DEADLINE_PST'].dt.hour - 7
+    offerh = dates['CREATED_ON_HQ'].dt.hour - 5
+    lh = (dates['Lead_B_days'] - 2)*16 + orderh + puh
+    ooh = (dates['Offer_B_days'] - 2)*16 + orderh + offerh
+    dates['Weight'] = ooh/lh
     return dates['Weight']
 
 def estimating_offers_model(path_file_offers, path_file_orders):
     df = estimating_offers_clean(path_file_offers, path_file_orders)
     orders = df[0]
     offers = df[1]
-    ftl = orders[orders['TRANSPORT_MODE']=='FTL']
+    #ftl = orders[orders['TRANSPORT_MODE']=='FTL']
+    ftl = orders.copy()
 
     weightVector = createWeightVector(ftl,offers)
 
@@ -109,8 +111,9 @@ def estimating_offers_model(path_file_offers, path_file_orders):
         'DELIVERY_TIME_CONSTRAINT',
         'ORIGIN_3DIGIT_ZIP',
         'DESTINATION_3DIGIT_ZIP',
+        'TRANSPORT_MODE'
     ]
-    X_train, X_test, y_train, y_test = train_test_split(new.loc[:,new.columns!='NumberOffers'], new['NumberOffers'], test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(new.loc[:,new.columns!='NumberOffers'], new['NumberOffers'], test_size=0.2, random_state=21)
     # Create a preprocessor to scale numerical features and one hot encode categorical features
     preprocessor = ColumnTransformer(
         transformers=[
@@ -129,13 +132,15 @@ def estimating_offers_model(path_file_offers, path_file_orders):
     # Train a logistic regression model using the transformed data
     model = LinearRegression()
     model.fit(X_train_transformed, y_train,sample_weight = X_train['Weight'])
+    model.fit(X_train_transformed, y_train)
 
     y_pred = model.predict(X_test_transformed).round()
-    mean_absolute_error(y_test,y_pred)
+    print('Number of Offers Prediction: MAE ' + str(mean_absolute_error(y_test,y_pred, sample_weight = X_test['Weight'])))
 
-    return model, new[bool_column_names + numerical_column_names + cat_column]
+    return model, preprocessor, new.drop('Weight',axis = 1)
 
 def main(args):
+    print('Predicting Number of Offers')
     path_folder_data = args["path_folder_data"]
     #file_name_temp_amount = args["file_name_temp_amount"]
     #file_name_output_df = "temp_amount.csv"
@@ -144,9 +149,9 @@ def main(args):
     path_file_orders = os.path.join(path_folder_data_raw, "offer_acceptance_orders.csv")
     path_file_offers = os.path.join(path_folder_data_raw, "offer_acceptance_offers.csv")
     
-    model, joinedDF = estimating_offers_model(path_file_offers, path_file_orders)
+    model, preprocessor, joinedDF = estimating_offers_model(path_file_offers, path_file_orders)
 
-    predictions = model.predict(joinedDF.to_numpy())
+    predictions = model.predict(preprocessor.transform(joinedDF))
     # making a dataframe with the reference number and predicted offer amount
     output_df = pd.DataFrame()
     joinedDF.reset_index(drop=False, inplace=True)
