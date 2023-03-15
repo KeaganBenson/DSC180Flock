@@ -33,11 +33,11 @@ if google_colab == 1:
     path_folder = "/content/drive/MyDrive/dsprojects/dsproject_ff_geo/current/" # parent of current src folder
 else:
     path_folder = "..//..//"
-import sys
-sys.path.insert(0, path_folder+"/src/dataclean")
-import util
+#import sys
+#sys.path.insert(0, path_folder+"/src/dataclean")
+#import util
 
-
+from . import util
 
 # https://www.census.gov/data/tables/time-series/demo/popest/2020s-counties-total.html
 def get_county_census_df(args):
@@ -256,7 +256,15 @@ def get_operating_zip3_buffers_gdf(args):
     print("Loaded zipcodes df")
     print(zipcode_coordinates.shape)
 
-    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
+    #zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
+    zipcode_coordinates["3DIGIT_ZIP"] = pd.to_numeric(zipcode_coordinates["3DIGIT_ZIP"], errors='coerce')
+    zipcode_coordinates.dropna(subset=["3DIGIT_ZIP"], inplace=True)    
+    df["OPERATING_ZIP3"] = pd.to_numeric(df["OPERATING_ZIP3"], errors='coerce')
+    df.dropna(subset=["OPERATING_ZIP3"], inplace=True)
+    
+    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int)
+    df["OPERATING_ZIP3"] = df["OPERATING_ZIP3"].astype(int)
+    
 
     print("Left-join between carrier data and zipcode coordinates")
     df = df.drop_duplicates(subset=["CARRIER_ID"])

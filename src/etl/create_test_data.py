@@ -7,6 +7,14 @@
 import os
 import numpy as np
 import pandas as pd
+import os
+import gdown
+from bs4 import BeautifulSoup  
+import requests
+import pandas as pd
+import requests
+import zipfile
+import io
 
 def create_test_data(args):
     path_folder_data = args["path_folder_data"]
@@ -218,6 +226,33 @@ def create_test_data(args):
     test_oa_orders.to_csv(path_file_oa_orders,index=False)
     test_oa_offers.to_csv(path_file_oa_offers,index=False)
 
+def download_file_from_google_drive_share_link_to_file_path(url, filepath):
+    gdown.download(url=url, output=filepath, quiet=False, fuzzy=True)
+
+def get_file_path(path_folder, filename):
+    path_file = os.path.join(path_folder, filename)
+    return path_file
+
+def create_test_data(args):
+    path_folder_data = args["path_folder_data"]
+    path_folder_data_raw = os.path.join(path_folder_data,"raw")
+
+    offer_acceptance_offers_google_drive_url = "https://drive.google.com/file/d/1kqzIoUlZ_DF3o6ILH17xCVmQhzGSqu-r/view?usp=sharing"
+    #offer_acceptance_offers_google_drive_url = "https://drive.google.com/file/d/17FWCWqGkhIwM7nHHLUNo1Ej2GnEJebmO/view?usp=sharing"
+    file_name_offer_acceptance_offers = "offer_acceptance_offers.csv"
+    path_file_offer_acceptance_offers = get_file_path(path_folder_data_raw, file_name_offer_acceptance_offers)
+    download_file_from_google_drive_share_link_to_file_path(offer_acceptance_offers_google_drive_url, path_file_offer_acceptance_offers)
+
+    offer_acceptance_orders_google_drive_url = "https://drive.google.com/file/d/1K_Y2IvT56HTaEEqoVCOnMRPeHWGAKHr4/view?usp=sharing"
+    file_name_offer_acceptance_orders = "offer_acceptance_orders.csv"
+    path_file_offer_acceptance_orders = get_file_path(path_folder_data_raw, file_name_offer_acceptance_orders)
+    download_file_from_google_drive_share_link_to_file_path(offer_acceptance_orders_google_drive_url, path_file_offer_acceptance_orders)
+    
+    offer_acceptance_orders_google_drive_url = "https://drive.google.com/file/d/15_rAsdtBmJsrQLDEPBpcBMrxY5LuMTCd/view?usp=sharing"
+    file_name_offer_acceptance_orders = "zipcode_coordinates.csv"
+    path_file_offer_acceptance_orders = get_file_path(path_folder_data_raw, file_name_offer_acceptance_orders)
+    download_file_from_google_drive_share_link_to_file_path(offer_acceptance_orders_google_drive_url, path_file_offer_acceptance_orders)
+    
 def main(args):
     create_test_data(args)
 

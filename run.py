@@ -16,6 +16,7 @@ Original file is located at
 
 
 import sys
+import os
 
 google_colab = 0
 if google_colab == 1:
@@ -40,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 def main_etl(args):
-    #import src.etl.make_dataset as etl
+    import src.etl.make_dataset as etl
     etl.main(args)
 
 def main_dataclean(args):
@@ -51,13 +52,14 @@ def main_model(args):
     model.main(args)
 
 def main_create_test_data(args):
+    print("to create test data")
     create_test_data.main(args)
 
 def main_test(args):
     main_clear(args)
     main_create_test_data(args)
     main_dataclean(args)
-    main_model(args)    
+    #main_model(args)    
 
 def main_all(args):
     main_clear(args)
@@ -124,10 +126,11 @@ def main(targets):
         if target in ["clear"]:
             main_clear(args)
         if target in ["test-data"]:
-            args["path_folder_data"] = test_path_folder
+            args["path_folder_data"] = test_path_folder_data
 
 if __name__ == "__main__":
     targets = sys.argv[1:]
     #targets = ["test"]
+    #targets = ["all"]
     main(targets)
 

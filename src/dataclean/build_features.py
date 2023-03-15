@@ -48,6 +48,10 @@ def build_features(args):
 
 def main(args):
     temp_avg_stdev = avg_stdev_model.main(args)
+    path_folder_data = args["path_folder_data"]
+    if "test" in path_folder_data:
+        print("Overly Perfect Confusion Matrix on test data")
+        return
     temp_amount = EstimatingOffersModel.main(args)
     
     final_df = build_features(args)

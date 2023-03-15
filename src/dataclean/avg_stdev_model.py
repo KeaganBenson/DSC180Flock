@@ -17,7 +17,7 @@ Original file is located at
 
 import sys
 
-google_colab = 1
+google_colab = 0
 if google_colab == 1:
     # Load the Drive helper and mount
     from google.colab import drive
@@ -27,9 +27,11 @@ if google_colab == 1:
 else:
     path_folder = "..//..//"
 
-sys.path.insert(0, path_folder+"/src/dataclean")
-import util
-import shipping_routes_geodataclean
+from . import util
+from . import shipping_routes_geodataclean
+#sys.path.insert(0, path_folder+"/src/dataclean")
+#import util
+#import shipping_routes_geodataclean
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
@@ -59,25 +61,29 @@ def dataclean(args):
     #args = {"path_folder_data": os.path.join(path_folder,"data")}
 
     """## Data File Reading"""
-    path_folder_data = os.path.join(path_folder, "data")
+    path_folder = args["path_folder"]
+    path_folder_data = args["path_folder_data"]
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
     path_folder_data_temp = os.path.join(path_folder_data,"temp")
     path_folder_data_final = os.path.join(path_folder_data,"final")
 
     file_name_oa_offers = "offer_acceptance_offers.csv"
     path_file_oa_offers = os.path.join(path_folder_data_raw, file_name_oa_offers)
+    print(path_file_oa_offers)
     oa_offers = pd.read_csv(path_file_oa_offers)
     print("Loaded offers df")
     print(oa_offers.shape)
 
     file_name_oa_orders = "offer_acceptance_orders.csv"
     path_file_oa_orders = os.path.join(path_folder_data_raw, file_name_oa_orders)
+    print(path_file_oa_orders)
     oa_orders = pd.read_csv(path_file_oa_orders)
     print("Loaded orders df")
     print(oa_orders.shape)
 
     file_name_zipcode_coordinates = "zipcode_coordinates.csv"
     path_file_zipcode_coordinates = os.path.join(path_folder_data_raw, file_name_zipcode_coordinates)
+    print(path_file_zipcode_coordinates)
     zipcode_coordinates = pd.read_csv(path_file_zipcode_coordinates)
     print("Loaded zipcodes df")
     print(zipcode_coordinates.shape)
@@ -145,6 +151,18 @@ def dataclean(args):
     if explode_references == 0:
         do_pooled_model = 0
 
+    if "test" in path_folder_data:
+        include_zipcode_coords_columns = 0
+        include_metro_cluster_columns = 0
+        include_time_ohe_columns = 0
+        include_distance_column = 0
+        include_duration_column = 0
+        include_distance_over_duration_column = 0
+        include_lead_time = 0
+        weighing_by_lead_time = 0
+        
+
+
     # data cleaning offers
     # In this part, I'm just adding columns to the oa offers table
 
@@ -211,8 +229,19 @@ def dataclean(args):
     zipcode_coordinates["Y_COORD"] /= 1.0e6
     # dividing zipcode coordinates to make their numbers smaller
 
-    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
+    #zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
     # convert the zipcodes to be 3-digit, zeropadded strings
+    zipcode_coordinates["3DIGIT_ZIP"] = pd.to_numeric(zipcode_coordinates["3DIGIT_ZIP"], errors='coerce')
+    zipcode_coordinates.dropna(subset=["3DIGIT_ZIP"], inplace=True)    
+    oa_orders["ORIGIN_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["ORIGIN_3DIGIT_ZIP"], errors='coerce')
+    oa_orders.dropna(subset=["ORIGIN_3DIGIT_ZIP"], inplace=True)
+    oa_orders["DESTINATION_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["DESTINATION_3DIGIT_ZIP"], errors='coerce')
+    oa_orders.dropna(subset=["DESTINATION_3DIGIT_ZIP"], inplace=True)
+    
+    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int)
+    oa_orders["DESTINATION_3DIGIT_ZIP"] = oa_orders["DESTINATION_3DIGIT_ZIP"].astype(int)
+    oa_orders["ORIGIN_3DIGIT_ZIP"] = oa_orders["ORIGIN_3DIGIT_ZIP"].astype(int)
+    
 
     if include_zipcode_coords_columns:
         # adds 2 new columns to the orders dataset: X_COORD_DEST, Y_COORD_DEST, which are the x, y coordinates of the order's destination zipcode
@@ -459,6 +488,11 @@ def dataclean(args):
     # At this point, no more new columns should be added to oa,
     # Any changes to oa's column schema at this point should only be about DROPPING columns
 
+    
+    if "test" in path_folder_data:
+        oa = pd.concat([oa for _ in range(1000)],axis=0).sample(frac=1).reset_index(drop=True)
+        print("new stacked oa shape", oa.shape)
+
     dropped_column_names = []
 
     dropped_column_names +=[
@@ -534,13 +568,15 @@ def dataclean(args):
     # Define the pipeline with preprocessor and PCA
     avg_pipeline = Pipeline([
         ('preprocessor_pipeline', preprocessor),
-        ('pca', PCA(n_components=50)),
+        ('pca', PCA(n_components=10)),
         #('model',LogisticRegression(class_weight="balanced"))
         ('model',DecisionTreeRegressor())
     ])
 
 
     # there are 2 models to make, one for avg and one for stdev,
+
+    print(oa.shape)
 
 
     
@@ -580,10 +616,10 @@ def dataclean(args):
     # weigh by lead time (if applicable)
     if weighing_by_lead_time:
         fit_params = {"model__sample_weight":X_train_weight_column}
-        print(cross_val_score(avg_pipeline,X_train,y_train,fit_params=fit_params))
+        #print(cross_val_score(avg_pipeline,X_train,y_train,fit_params=fit_params))
         avg_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
     else:
-        print(cross_val_score(avg_pipeline,X_train,y_train))
+        #print(cross_val_score(avg_pipeline,X_train,y_train))
         avg_pipeline.fit(X_train,y_train)
 
     predictions = avg_pipeline.predict(X_test)
@@ -595,7 +631,7 @@ def dataclean(args):
     # Define the pipeline with preprocessor and PCA
     sd_pipeline = Pipeline([
         ('preprocessor_pipeline', preprocessor),
-        ('pca', PCA(n_components=50)),
+        ('pca', PCA(n_components=10)),
         #('model',LogisticRegression(class_weight="balanced"))
         ('model',RandomForestClassifier(10,class_weight="balanced"))
     ])
@@ -635,16 +671,18 @@ def dataclean(args):
 
     if weighing_by_lead_time:
         fit_params = {"model__sample_weight":X_train_weight_column}
-        print(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),fit_params=fit_params,scoring="roc_auc"))
+        #print(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),fit_params=fit_params,scoring="roc_auc"))
         sd_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
     else:
-        print(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),scoring="roc_auc"))
+        #print(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),scoring="roc_auc"))
         sd_pipeline.fit(X_train,y_train)
 
     predictions = sd_pipeline.predict(X_test)
     print(np.mean(predictions==y_test))
     print(confusion_matrix(y_test,predictions,normalize="true"))
     print(roc_auc_score(y_test,predictions))
+
+
 
 
     get_sd_by_tier = np.vectorize(lambda x: sd_median*int(x))
