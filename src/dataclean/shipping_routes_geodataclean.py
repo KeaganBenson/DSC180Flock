@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 import requests
 import zipfile
 import io
-import tqdm
+#import tqdm
 
 import geopandas as gpd
 import shapely
@@ -152,7 +152,7 @@ def get_county_weather_df_monthly(args):
     temp_tavg_df_concat_list = []
     temp_pcp_df_concat_list = []
 
-    for month_i in tqdm.tqdm(range(12)):
+    for month_i in list(range(12)):
         file_name_county_tavg = county_tavg_csv_file_names_list_sorted[month_i]
         path_file_county_tavg = os.path.join(path_folder_data_county_weather, file_name_county_tavg)
         tavg_df = pd.read_csv(path_file_county_tavg, skiprows=3).iloc[:,:3]
