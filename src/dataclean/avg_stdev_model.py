@@ -200,8 +200,8 @@ def dataclean(args):
 
     for column_name in oa_offers_date_column_names: oa_offers = util.convert_pd_datetime_column(oa_offers, column_name);
     for column_name in oa_offers_boolean_column_names: oa_offers = util.convert_boolean_to_num_column(oa_offers, column_name);
-    for column_name in oa_offers_loggable_numerical_column_names: oa_offers = util.add_log_column_to_df(oa_offers, column_name,drop_prelogged=True);
-
+    for column_name in oa_offers_loggable_numerical_column_names: oa_offers = util.add_log_column_to_df(oa_offers, column_name,drop_prelogged=False);
+    #oa_offers["LOG(RATE_USD)"] = oa_offers["RATE_USD"]
 
 
     # data cleaning orders
@@ -374,10 +374,12 @@ def dataclean(args):
     # it needs to be exploded using pandas explode before beinng joined (and for oa_offers, it needs to be exploded before the groupby, maybe)
 
     log_rate_usd_column_name = "LOG(RATE_USD)"
+    rate_usd_column_name = "RATE_USD"
     count_reference_numbers_column_name = "ORDER_OFFER_AMOUNT"
     sd_log_rate_usd_column_name = "SD_LOG(RATE_USD)"
     # adding a duplicate of the rates column to apply standard deviaton later on during the group by
-    oa_offers[sd_log_rate_usd_column_name] = oa_offers[log_rate_usd_column_name]
+    oa_offers[sd_log_rate_usd_column_name] = oa_offers["RATE_USD"]
+    if "RATE_USD" in list(oa_offers.columns): oa_offers.drop(columns=["RATE_USD"],inplace=True)
     ##adding a column for offer amount to do count later on during the group by
     oa_offers[count_reference_numbers_column_name] = 1
 
@@ -623,7 +625,7 @@ def dataclean(args):
         avg_pipeline.fit(X_train,y_train)
 
     predictions = avg_pipeline.predict(X_test)
-    print(np.corrcoef(y_test,predictions)[0][1])
+    print("CorrCoef of Avg Model:",np.corrcoef(y_test,predictions)[0][1])
 
     # now, this next part is for stdev model
     # this just repeats the same things that the avg model did.
@@ -660,6 +662,9 @@ def dataclean(args):
     sd_X = X
     sd_median = np.median(input_df[target_column_name])
     y = (input_df[target_column_name]>sd_median).astype(int)
+    print("sd_median:",sd_median)
+    print(np.mean(input_df[target_column_name]>sd_median))
+    print(np.mean(input_df[target_column_name]==0))
 
     X_train = X.loc[temp_train_test_indexer == 1]
     if weighing_by_lead_time:
@@ -678,9 +683,11 @@ def dataclean(args):
         sd_pipeline.fit(X_train,y_train)
 
     predictions = sd_pipeline.predict(X_test)
-    print(np.mean(predictions==y_test))
+    print("Accuracy of StDev Model:", np.mean(predictions==y_test))
+    print("StDev Model Confusion Matrix:")
     print(confusion_matrix(y_test,predictions,normalize="true"))
-    print(roc_auc_score(y_test,predictions))
+    print("ROC AUC Score of StDev Model:", roc_auc_score(y_test,predictions))
+    #util.view_pca(X,y)
 
 
 
@@ -688,8 +695,12 @@ def dataclean(args):
     get_sd_by_tier = np.vectorize(lambda x: sd_median*int(x))
     output_df = pd.DataFrame()
     output_df["REFERENCE_NUMBER"] = reference_number_column
-    output_df["PREDICTED_LOG_AVG"] = avg_pipeline.predict(avg_X)
-    output_df["PREDICTED_STDEV"] = get_sd_by_tier(sd_pipeline.predict(sd_X))
+    avg_prediction_column = avg_pipeline.predict(avg_X)
+    #avg_prediction_column = np.expm1(avg_prediction_column)
+    output_df["PREDICTED_LOG_AVG"] = avg_prediction_column
+    sd_prediction_column = sd_pipeline.predict(sd_X)
+    sd_prediction_column = get_sd_by_tier(sd_prediction_column)
+    output_df["PREDICTED_STDEV"] = sd_prediction_column
     # writing output file
 
     file_name_temp_avg_stdev = args["file_name_temp_avg_stdev"]
