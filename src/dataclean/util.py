@@ -799,7 +799,7 @@ def temp_build_metro_cluster(oa,
                             value_column_name="ORDER_OFFER_AMOUNT",
                             centroid_as_metro=False,
                             group_amount=20):
-    print("Do not drop ORDER_OFFER_AMOUNT column before clustering the metro areas")
+    #print("Do not drop ORDER_OFFER_AMOUNT column before clustering the metro areas")
     assert x_coord_column_name in list(oa.columns)
     assert y_coord_column_name in list(oa.columns)
     assert value_column_name in list(oa.columns)
@@ -825,7 +825,7 @@ def temp_build_metro_cluster_columns(oa,
                                      y_coord_column_name,
                                      metro_cluster_column_names,
                                      ):
-    print("Do not drop ORDER_OFFER_AMOUNT column before clustering the metro areas")
+    #print("Do not drop ORDER_OFFER_AMOUNT column before clustering the metro areas")
     assert x_coord_column_name in list(oa.columns)
     assert y_coord_column_name in list(oa.columns)
 

@@ -9,11 +9,6 @@ Original file is located at
 # Model for Average and StDev
 """
 
-#!pip install geopandas
-
-
-
-
 
 import sys
 
@@ -29,9 +24,14 @@ else:
 
 from . import util
 from . import shipping_routes_geodataclean
-#sys.path.insert(0, path_folder+"/src/dataclean")
-#import util
-#import shipping_routes_geodataclean
+
+
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder,FunctionTransformer
+from sklearn.model_selection import StratifiedKFold
+from sklearn.decomposition import PCA
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
@@ -53,12 +53,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 plt.style.use("ggplot")
 from matplotlib import collections  as mc
-from sklearn.preprocessing import StandardScaler
 
+
+    
 
 def dataclean(args):
     
-    #args = {"path_folder_data": os.path.join(path_folder,"data")}
 
     """## Data File Reading"""
     path_folder = args["path_folder"]
@@ -90,7 +90,10 @@ def dataclean(args):
 
     """## Data Cleaning"""
 
-    
+    # these are a bunch of binary 1/0 constants that are supposed to modify different conditions on how the
+    # data-preparation is performed, and was simply used to try out different variations of EDA.
+    # Some of these are "oxbow code" that never get used in this python script at all,
+    # but most of them are in fact used in the avg_stdev_model_notebook.ipynb file
     include_lead_time = 1
     weighing_by_lead_time = 1
     revamp_weighing_by_lead_time = 0
@@ -118,9 +121,6 @@ def dataclean(args):
     drop_prelogged = 0
     model_soph = 1
 
-    # = [0,0,0,0,0]+[0,0,1,0,1] is sd and num separable pca
-
-    # temporary columns. ALWAYS KEEP THESE SET TO 1
     include_zipcode_coords_columns = 1
     include_metro_cluster_columns = 1
     include_time_ohe_columns = 1
@@ -163,7 +163,7 @@ def dataclean(args):
         
 
 
-    # data cleaning offers
+    # Part 1: data cleaning offers
     # In this part, I'm just adding columns to the oa offers table
 
     oa_offers_boolean_column_names = ['LOAD_DELIVERED_FROM_OFFER']
@@ -174,13 +174,11 @@ def dataclean(args):
     # LOAD_DELIVERED_FROM_OFFER must be kept for lead time
     # CREATED_ON_HQ must be kept for lead time
     # OFFER_TYPE must be kept for the pooled column
-
     oa_offers_date_column_names = ["CREATED_ON_HQ"]
     oa_offers_categorical_column_names = ["OFFER_TYPE"]
     oa_offers_loggable_numerical_column_names = ["RATE_USD"]
     oa_offers_numerical_column_names = []
     oa_offers_ohe_column_names = []
-
     oa_offers = util.add_cleaned_reference_numbers_column(oa_offers)
     oa_offers = util.add_num_reference_numbers_column(oa_offers)
     oa_offers = util.dataclean_pool_reference_numbers_discrepancy(oa_offers)
@@ -201,33 +199,29 @@ def dataclean(args):
     for column_name in oa_offers_date_column_names: oa_offers = util.convert_pd_datetime_column(oa_offers, column_name);
     for column_name in oa_offers_boolean_column_names: oa_offers = util.convert_boolean_to_num_column(oa_offers, column_name);
     for column_name in oa_offers_loggable_numerical_column_names: oa_offers = util.add_log_column_to_df(oa_offers, column_name,drop_prelogged=False);
-    #oa_offers["LOG(RATE_USD)"] = oa_offers["RATE_USD"]
 
 
-    # data cleaning orders
+    # Part 2: data cleaning orders
     # In this part, I'm just adding columns to the oa orders table
 
     oa_orders_categorical_column_names = ["DELIVERY_TIME_CONSTRAINT","TRANSPORT_MODE"]
     # column names contained in this categorical column names list are those that plan to be one-hot-encoded later on
     oa_orders_ohe_column_names = []
-
     oa_orders_boolean_column_names = ['FD_ENABLED', 'EXCLUSIVE_USE_REQUESTED','HAZARDOUS', 'REEFER_ALLOWED', 'STRAIGHT_TRUCK_ALLOWED','LOAD_TO_RIDE_REQUESTED']
     # column names contained in this boolean column names list are those that will be treated as boolean
     oa_orders_loggable_numerical_column_names = ["ESTIMATED_COST_AT_ORDER","PALLETIZED_LINEAR_FEET","LOAD_BAR_COUNT"]
     # column names contained in this loggable numerical column names list are those that plan to be log-transformed later on
-
     #if include_estimated_cost == 0: oa_orders_loggable_numerical_column_names.remove("ESTIMATED_COST_AT_ORDER");
-
-
+    
     oa_orders_numerical_column_names = []
     # column names contained in this numerical column names list are those that are numerical but shouldn't be log transformed
-
+    
     oa_orders_date_column_names = ["ORDER_DATETIME_PST","PICKUP_DEADLINE_PST"] # ORDER_DATETIME_PST is necessary for lead time
 
 
     zipcode_coordinates["X_COORD"] /= 1.0e6
     zipcode_coordinates["Y_COORD"] /= 1.0e6
-    # dividing zipcode coordinates to make their numbers smaller
+    # dividing zipcode coordinates to tone down their scaling
 
     #zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
     # convert the zipcodes to be 3-digit, zeropadded strings
@@ -237,7 +231,6 @@ def dataclean(args):
     oa_orders.dropna(subset=["ORIGIN_3DIGIT_ZIP"], inplace=True)
     oa_orders["DESTINATION_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["DESTINATION_3DIGIT_ZIP"], errors='coerce')
     oa_orders.dropna(subset=["DESTINATION_3DIGIT_ZIP"], inplace=True)
-    
     zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int)
     oa_orders["DESTINATION_3DIGIT_ZIP"] = oa_orders["DESTINATION_3DIGIT_ZIP"].astype(int)
     oa_orders["ORIGIN_3DIGIT_ZIP"] = oa_orders["ORIGIN_3DIGIT_ZIP"].astype(int)
@@ -360,7 +353,8 @@ def dataclean(args):
     for column_name in oa_orders_boolean_column_names: 
         oa_orders = util.convert_boolean_to_num_column(oa_orders, column_name);
 
-    # Joining the oa_offers and oa_orders into a new table called oa
+
+    # Part 3: Joining the oa_offers and oa_orders into a new table called oa
 
 
     # The offers data (oa_offers) and orders data (oa_orders) will be joined as follows:
@@ -380,7 +374,7 @@ def dataclean(args):
     # adding a duplicate of the rates column to apply standard deviaton later on during the group by
     oa_offers[sd_log_rate_usd_column_name] = oa_offers["RATE_USD"]
     if "RATE_USD" in list(oa_offers.columns): oa_offers.drop(columns=["RATE_USD"],inplace=True)
-    ##adding a column for offer amount to do count later on during the group by
+    # adding a column for offer amount to do count later on during the group by
     oa_offers[count_reference_numbers_column_name] = 1
 
     oa_orders = oa_orders.drop_duplicates(subset=["REFERENCE_NUMBER"])
@@ -424,10 +418,10 @@ def dataclean(args):
     # now, the newly exploded oa_offers must be groupby'd on REFERENCE_NUMBERS to be in the same joinable level as oa orders
 
     aggdict = dict()
-    aggdict[log_rate_usd_column_name] = "mean" #np.mean 
-    aggdict[sd_log_rate_usd_column_name] = "std" #np.std # standard deviation
+    aggdict[log_rate_usd_column_name] = np.mean 
+    aggdict[sd_log_rate_usd_column_name] = np.std # standard deviation
     #aggdict["OFFER_TYPE_IS_POOLED"] = np.mean
-    aggdict[count_reference_numbers_column_name] = "sum" #np.sum
+    aggdict[count_reference_numbers_column_name] = np.sum
     oa_offers_exploded_groupby = oa_offers_exploded.groupby([foreign_key_column_name],as_index=False).agg(aggdict)
     oa_offers_exploded_groupby = oa_offers_exploded_groupby.fillna(0) # fixes any accidental nan's in the stdev
 
@@ -455,7 +449,6 @@ def dataclean(args):
         oa = util.add_metro_cluster_columns(oa, dest_metro_cluster_columns)
         oa_numerical_column_names += dest_proximity_column_names
 
-    print(oa.shape)
     lead_time_column_name = "LEAD_TIME"
     weight_column_name = None
     if include_lead_time == True:
@@ -469,10 +462,9 @@ def dataclean(args):
                                        reference_number_column_name=foreign_key_column_name)
     if weighing_by_lead_time == True:
         weight_column_name = lead_time_column_name
-    print(oa.shape)
 
     # necessary for path visualizations, which have a LOG(ORDER_OFFER_AMOUNT) column name
-    oa = util.add_log_column_to_df(oa, count_reference_numbers_column_name, drop_prelogged=False)
+    #oa = util.add_log_column_to_df(oa, count_reference_numbers_column_name, drop_prelogged=False)
 
     # Optional factors. All of these can only be done after oa join
     if include_sparse_orders == 0:
@@ -495,14 +487,13 @@ def dataclean(args):
         oa = pd.concat([oa for _ in range(1000)],axis=0).sample(frac=1).reset_index(drop=True)
         print("new stacked oa shape", oa.shape)
 
-    dropped_column_names = []
+    # part 4: the model building and training 
 
-    dropped_column_names +=[
+    dropped_column_names =[
         'ORDER_DATETIME_PST', 
         'PICKUP_DEADLINE_PST',
         'ORIGIN_3DIGIT_ZIP', 
         'DESTINATION_3DIGIT_ZIP',
-        #'LOG(ESTIMATED_COST_AT_ORDER)',
         'REFERENCE_NUMBERS',
         'REFERENCE_NUMBER',
         'CREATED_ON_HQ'
@@ -517,18 +508,10 @@ def dataclean(args):
     # At this point, oa should FULLY have numerical column names
     # However, if the variable do_ohe was set to False, then the categorical column names are still waiting to be encoded.
 
-    from sklearn.pipeline import Pipeline
-    from sklearn.compose import ColumnTransformer
-    from sklearn.impute import SimpleImputer
-    from sklearn.preprocessing import StandardScaler, OneHotEncoder,FunctionTransformer
-    from sklearn.model_selection import StratifiedKFold
-    from sklearn.decomposition import PCA
-
     numerical_column_names_0 = oa_orders_boolean_column_names
     numerical_column_names_1 = oa_numerical_column_names + oa_orders_numerical_column_names
     numerical_column_names_2 = oa_orders_loggable_numerical_column_names
     categorical_column_names_0 = oa_orders_categorical_column_names
-
     numerical_pipeline_0 = Pipeline([
                 ('imputer', SimpleImputer(strategy='constant', fill_value=0)),
             ])
@@ -541,7 +524,6 @@ def dataclean(args):
                 ('log_transform', FunctionTransformer(np.log1p)),
                 #('scaler', StandardScaler())
             ])
-
     numerical_transformer = ColumnTransformer(
         transformers=[
             ('num_0', numerical_pipeline_0, numerical_column_names_0),
@@ -552,12 +534,10 @@ def dataclean(args):
                 ('imputer', SimpleImputer(strategy='constant', fill_value='__NULL__')),
                 ('ohe',OneHotEncoder(handle_unknown='ignore', categories='auto', sparse=False, dtype=int)),
             ])
-    # Define the transformer for the categorical columns with OneHotEncoder
     categorical_transformer = ColumnTransformer(
         transformers=[('cat_0',categorical_pipeline_0, categorical_column_names_0)]
     )
-
-    # Combine the transformers using ColumnTransformer
+    
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', numerical_transformer, numerical_column_names_0 + numerical_column_names_1 + numerical_column_names_2),
@@ -567,18 +547,14 @@ def dataclean(args):
 
     preprocessor_pipeline = Pipeline([("preprocessor",preprocessor)])
 
-    # Define the pipeline with preprocessor and PCA
     avg_pipeline = Pipeline([
         ('preprocessor_pipeline', preprocessor),
         ('pca', PCA(n_components=10)),
-        #('model',LogisticRegression(class_weight="balanced"))
         ('model',DecisionTreeRegressor())
     ])
 
 
     # there are 2 models to make, one for avg and one for stdev,
-
-    print(oa.shape)
 
 
     
@@ -591,12 +567,10 @@ def dataclean(args):
         "SD_LOG(RATE_USD)",
         "ORDER_OFFER_AMOUNT",
     ]
-    if include_lead_time: 
-        target_column_names += [weight_column_name]
+    #if include_lead_time: target_column_names += [weight_column_name]
     temp_target_column_names = target_column_names.copy()
     temp_target_column_names.remove(target_column_name)
-    if weighing_by_lead_time:
-        temp_target_column_names.remove(weight_column_name)
+    #if weighing_by_lead_time: temp_target_column_names.remove(weight_column_name)
     input_df = oa.drop(columns=temp_target_column_names)
 
 
@@ -607,12 +581,14 @@ def dataclean(args):
     y = input_df[target_column_name]
 
     X_train = X.loc[temp_train_test_indexer == 1]
-    if weighing_by_lead_time:
-        X_train_weight_column = X_train[weight_column_name]
-        X_train.drop(columns=[weight_column_name],inplace=True)
     y_train = y.loc[temp_train_test_indexer == 1]
     X_test = X.loc[temp_train_test_indexer == 0]
     y_test = y.loc[temp_train_test_indexer == 0]
+    if weighing_by_lead_time:
+        X_train_weight_column = X_train[weight_column_name]
+        X_train.drop(columns=[weight_column_name],inplace=True)
+        X_test.drop(columns=[weight_column_name],inplace=True)
+
 
 
     # weigh by lead time (if applicable)
@@ -623,7 +599,6 @@ def dataclean(args):
     else:
         #print(cross_val_score(avg_pipeline,X_train,y_train))
         avg_pipeline.fit(X_train,y_train)
-
     predictions = avg_pipeline.predict(X_test)
     print("CorrCoef of Avg Model:",np.corrcoef(y_test,predictions)[0][1])
 
@@ -638,24 +613,19 @@ def dataclean(args):
         ('model',RandomForestClassifier(10,class_weight="balanced"))
     ])
 
-
     np.random.seed(1)
     target_column_name="SD_LOG(RATE_USD)"
-
-
     target_column_names=[
         "LOG(RATE_USD)",
         "SD_LOG(RATE_USD)",
         "ORDER_OFFER_AMOUNT",
     ]
-
-    if include_lead_time:
-        target_column_names += [weight_column_name]
+    #if include_lead_time: target_column_names += [weight_column_name]
     temp_target_column_names = target_column_names.copy()
     temp_target_column_names.remove(target_column_name)
-    if weighing_by_lead_time:
-        temp_target_column_names.remove(weight_column_name)
+    #if weighing_by_lead_time: temp_target_column_names.remove(weight_column_name)
     input_df = oa.drop(columns=temp_target_column_names)
+
 
     temp_train_test_indexer = np.random.choice([1,0],size=input_df.shape[0],p=[4/5,1/5])
     X = input_df.drop(columns=[target_column_name])
@@ -663,16 +633,19 @@ def dataclean(args):
     sd_median = np.median(input_df[target_column_name])
     y = (input_df[target_column_name]>sd_median).astype(int)
     print("sd_median:",sd_median)
-    print(np.mean(input_df[target_column_name]>sd_median))
-    print(np.mean(input_df[target_column_name]==0))
+    #print(np.mean(input_df[target_column_name]>sd_median))
+    #print(np.mean(input_df[target_column_name]==0))
+    
 
     X_train = X.loc[temp_train_test_indexer == 1]
-    if weighing_by_lead_time:
-        X_train_weight_column = X_train[weight_column_name]
-        X_train.drop(columns=[weight_column_name],inplace=True)
     y_train = y.loc[temp_train_test_indexer == 1]
     X_test = X.loc[temp_train_test_indexer == 0]
     y_test = y.loc[temp_train_test_indexer == 0]
+    if weighing_by_lead_time:
+        X_train_weight_column = X_train[weight_column_name]
+        X_train.drop(columns=[weight_column_name],inplace=True)
+        X_test.drop(columns=[weight_column_name],inplace=True)
+
 
     if weighing_by_lead_time:
         fit_params = {"model__sample_weight":X_train_weight_column}
@@ -687,7 +660,13 @@ def dataclean(args):
     print("StDev Model Confusion Matrix:")
     print(confusion_matrix(y_test,predictions,normalize="true"))
     print("ROC AUC Score of StDev Model:", roc_auc_score(y_test,predictions))
-    #util.view_pca(X,y)
+    
+    preprocessed_X = preprocessor_pipeline.transform(X)
+    Z = PCA(2).fit_transform(preprocessed_X)
+    fig, ax = plt.subplots()
+    ax.scatter(Z[:,0],Z[:,1],c=y,alpha=0.5,s=5)
+    plt.show()
+    
 
 
 
