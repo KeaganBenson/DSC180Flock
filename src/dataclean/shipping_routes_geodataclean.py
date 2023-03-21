@@ -23,6 +23,8 @@ import io
 
 import geopandas as gpd
 import shapely
+#import shapely
+from shapely.geometry import Point, LineString
 
 google_colab = 0
 if google_colab == 1:
@@ -48,7 +50,11 @@ def get_county_census_df(args):
     path_folder_data_county_census = os.path.join(path_folder_data_raw,"county_census_data")
     file_name_county_census = 'county_census_data.xlsx'
     path_file_data_county_census = os.path.join(path_folder_data_county_census,file_name_county_census)
-    county_census_df_orig = pd.read_excel(path_file_data_county_census,skiprows=3)
+    try:
+        county_census_df_orig = pd.read_excel(path_file_data_county_census,skiprows=3)
+    except:
+        county_census_df_file = pd.ExcelFile(path_file_data_county_census)
+        county_census_df_orig = county_census_df_file.parse(0, skiprows=3)
     county_census_df = county_census_df_orig
     # dataclean county census df3
     county_census_df = county_census_df.iloc[1:3143,:2]
@@ -275,12 +281,27 @@ def get_operating_zip3_buffers_gdf(args):
         .drop(columns=["3DIGIT_ZIP"])
     )
 
+    try:
+        xy_coords_to_point_func = np.vectorize(lambda x, y: Point(x,y))
+        xy_coords_to_point_func = np.vectorize(xy_coord_to_point_func)
+        x_coord_column = df['X_COORD_OPER']
+        y_coord_column = df['Y_COORD_OPER']
+        point_column_name = "POINT_OPER"
+        point_column = xy_coords_to_point_func(x_coord_column,y_coord_column)
 
-    xy_coords_to_point_func = np.vectorize(lambda x, y: shapely.Point(x,y))
-    x_coord_column = df['X_COORD_OPER']
-    y_coord_column = df['Y_COORD_OPER']
-    point_column_name = "POINT_OPER"
-    point_column = xy_coords_to_point_func(x_coord_column,y_coord_column)
+    except:
+        point_column_name = "POINT_OPER"
+        xy_coord_to_point_func = lambda x, y: Point(x,y)
+        x_coord_column_name = 'X_COORD_OPER'
+        y_coord_column_name = 'Y_COORD_OPER'
+        x_coord_column = df[x_coord_column_name]
+        y_coord_column = df[y_coord_column_name]
+        point_column = df[[x_coord_column_name,y_coord_column_name]].apply(
+            lambda df: xy_coord_to_point_func(
+                df[x_coord_column_name],df[y_coord_column_name]
+            ), axis=1)
+    
+    
     df[point_column_name] = point_column
 
     df.dropna(subset=["OPERATING_ZIP3"],inplace=True)
@@ -289,7 +310,8 @@ def get_operating_zip3_buffers_gdf(args):
     oper_count_column_name = "OPER_COUNT"
     df[oper_count_column_name] = oper_count_column
     df = df[[zipcode_oper_column_name,point_column_name,oper_count_column_name]]
-    df.drop_duplicates(inplace=True)
+    
+    df.drop_duplicates(subset=[zipcode_oper_column_name,oper_count_column_name], inplace=True) # point column cannot be interpreted as unique, so omit it
     geometry_column_name = "geometry"
     df.rename(columns={point_column_name:geometry_column_name},inplace=True)
     gdf = gpd.GeoDataFrame(df,crs="EPSG:3857")
@@ -321,11 +343,18 @@ class Temp_Path_Builder:
 
         '''
         if df is None: df = self.orders_df;
-        xy_coords_to_point_func = np.vectorize(lambda x, y: shapely.Point(x,y))
+        xy_coord_to_point_func = lambda x, y: Point(x,y)
+        xy_coords_to_point_func = np.vectorize(xy_coord_to_point_func)
         df = df.drop_duplicates(subset=[x_coord_column_name, y_coord_column_name])
-        x_coord_column = df[x_coord_column_name]
-        y_coord_column = df[y_coord_column_name]
-        point_column = xy_coords_to_point_func(x_coord_column,y_coord_column)
+        try:
+            x_coord_column = df[x_coord_column_name]
+            y_coord_column = df[y_coord_column_name]
+            point_column = xy_coords_to_point_func(x_coord_column,y_coord_column)
+        except:
+            point_column = df[[x_coord_column_name,y_coord_column_name]].apply(
+                lambda df: xy_coord_to_point_func(
+                    df[x_coord_column_name],df[y_coord_column_name]
+                ), axis=1)
         df[point_column_name] = point_column
         point_df = df[[x_coord_column_name,y_coord_column_name,point_column_name]]
         if inplace == True: setattr(self,point_df_name,point_df);
@@ -355,11 +384,19 @@ class Temp_Path_Builder:
         df = df.merge(point_orig_df,on=[x_coord_orig_column_name,y_coord_orig_column_name])
         df = df.merge(point_dest_df,on=[x_coord_dest_column_name,y_coord_dest_column_name])
 
-        points_to_line_func = np.vectorize(lambda point_orig, point_dest: shapely.LineString([point_orig, point_dest]))
+        point_to_line_func = lambda point_orig, point_dest: LineString([point_orig, point_dest])
 
-        path_point_dest_column = df[point_orig_column_name]
-        path_point_orig_column = df[point_dest_column_name]
-        path_line_column = points_to_line_func(path_point_dest_column,path_point_orig_column)
+        points_to_line_func = np.vectorize(point_to_line_func)
+
+        try:
+            path_point_dest_column = df[point_orig_column_name]
+            path_point_orig_column = df[point_dest_column_name]
+            path_line_column = points_to_line_func(path_point_dest_column,path_point_orig_column)
+        except:
+            path_line_column = df[[point_orig_column_name,point_dest_column_name]].apply(
+            lambda df: point_to_line_func(
+                df[point_orig_column_name],df[point_dest_column_name]
+                ), axis=1)
         df[path_column_name] = path_line_column
         #df[path_id_column_name] = df["ORIGIN_3DIGIT_ZIP"] + "_TO_" + df["DESTINATION_3DIGIT_ZIP"]
         df = df[[x_coord_orig_column_name,y_coord_orig_column_name,x_coord_dest_column_name,y_coord_dest_column_name,path_column_name]]
@@ -514,7 +551,7 @@ def temp_build_routes_df(args,orders_df):
     print("Spatially Joining Operating Zipcode Buffers against Shipping Route Polylines. This may take 5 to 8 minutes")
 
     path_oper_gdf = temp_path_builder.build_path_area_gdf(area_gdf=carrier_gdf,path_area_gdf_name="path_oper_gdf",inplace=False)
-    print("Completed Joining Operating Zipcode Buffers against Shipping Route Polylines. This may take 5 to 8 minutes")
+    print("Completed Joining Operating Zipcode Buffers against Shipping Route Polylines")
 
 
     path_oper_count = path_oper_gdf.groupby(
@@ -553,6 +590,6 @@ def temp_build_routes_df(args,orders_df):
 
     file_name_route_data = "paths_geoenriched.csv"
     path_file_route_data = os.path.join(path_folder_data_temp, file_name_route_data)
-    orders_df_final.to_csv(path_file_route_data,index=False)
+    #orders_df_final.to_csv(path_file_route_data,index=False)
     return orders_df_final
 
