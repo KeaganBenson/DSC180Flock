@@ -51,7 +51,7 @@ def bound_ax(ax):
 
 class Metro_Cluster:
     '''
-    
+    A class for making the columns that would one-hot-encode the zipcodes into metropolitan regions
     '''
     def __init__(
         self,
@@ -61,8 +61,11 @@ class Metro_Cluster:
         value_column_name,
         cluster_method="kmeans",
         group_column_name = "GROUP",
-        group_amount = 20
+        group_amount = 20,
     ):
+        """
+        
+        """
         assert cluster_method in ["kmeans","dbscan"]
         self.value_column_name = value_column_name
         
@@ -200,8 +203,8 @@ class Metro_Cluster:
         y_column_name,
         proximity_column_names,
         zero_division_preventer = 1,
-        
     ):
+        
         if self.cluster_method == "kmeans":
             zero_division_preventer = 1
             x_distances = (np.expand_dims(df[x_column_name].values,1) - self.opt_pivot[self.opt_pivot_x_column_names].values)**2
@@ -364,58 +367,58 @@ def add_columns(df,columns):
     return df
 
 ## One hot encoding
-def temp_build_ohe(categorical_column, column_name):
-    '''
-    Builds the categorical_column
-    Args:
-    categorical_column (pd.Series): the categorical column that is to be one-hot-encoded
-    column_name (str): the column name of the categorical column that is to be one-hot-encoded, and to be the prefix of the new one-hot-encoded columns
-    drop_preohe (bool): boolean to decide to drop the categorical column from df
-    
-    Returns:
-    pd.DataFrame, the one-hot-encoded columns, of column names with the format "column_name=class_1, column_name=class_2 ..."
-    '''
-    categorical_column = categorical_column.astype(str)
-    categorical_column = categorical_column.fillna("NULL")
-    ohe = pd.get_dummies(categorical_column, prefix=column_name,prefix_sep='=')
-    return ohe
-def temp_build_ohe_columns(ohe):
-    """
-    ohe is the output of temp_build_ohe
-    
-    """
-    ohe_columns = ohe
-    # TODO: add things to ohe_columns
-    #
-    return ohe_columns
-def add_ohe_columns(df, ohe_columns):   
-    df = add_columns(df,ohe_columns)
-    return df
-def add_ohe_columns_to_df(df, column_name,drop_preohe=False):
-    '''
-    Main function that does temp_build_ohe, temp_build_ohe_columns, and add_ohe_columns,
-    and additional option to drop the original categorical column from df with the arg drop_preohe
-    
-    Args:
-    df (pd.DataFrame): given dataframe
-    column_name (str): the column name of the categorical column that is to be one-hot-encoded
-    drop_preohe (bool): boolean to decide to drop the categorical column from df
-    
-    Returns:
-    pd.DataFrame, the given dataframe with the new one-hot-encoded columns
-
-    Raises:
-    AssertionError: if column_name is not in df   
-    '''
-    assert column_name in list(df.columns)
-    
-    series = df[column_name]
-    ohe = temp_build_ohe(series,column_name)
-    ohe_columns = temp_build_ohe_columns(ohe) 
-    df = add_ohe_columns(df, ohe_columns)
-    if drop_preohe:
-        df.drop(columns=[column_name],inplace=True)
-    return df
+##def temp_build_ohe(categorical_column, column_name):
+##    '''
+##    Builds the categorical_column
+##    Args:
+##    categorical_column (pd.Series): the categorical column that is to be one-hot-encoded
+##    column_name (str): the column name of the categorical column that is to be one-hot-encoded, and to be the prefix of the new one-hot-encoded columns
+##    drop_preohe (bool): boolean to decide to drop the categorical column from df
+##    
+##    Returns:
+##    pd.DataFrame, the one-hot-encoded columns, of column names with the format "column_name=class_1, column_name=class_2 ..."
+##    '''
+##    categorical_column = categorical_column.astype(str)
+##    categorical_column = categorical_column.fillna("NULL")
+##    ohe = pd.get_dummies(categorical_column, prefix=column_name,prefix_sep='=')
+##    return ohe
+##def temp_build_ohe_columns(ohe):
+##    """
+##    ohe is the output of temp_build_ohe
+##    
+##    """
+##    ohe_columns = ohe
+##    # TODO: add things to ohe_columns
+##    #
+##    return ohe_columns
+##def add_ohe_columns(df, ohe_columns):   
+##    df = add_columns(df,ohe_columns)
+##    return df
+##def add_ohe_columns_to_df(df, column_name,drop_preohe=False):
+##    '''
+##    Main function that does temp_build_ohe, temp_build_ohe_columns, and add_ohe_columns,
+##    and additional option to drop the original categorical column from df with the arg drop_preohe
+##    
+##    Args:
+##    df (pd.DataFrame): given dataframe
+##    column_name (str): the column name of the categorical column that is to be one-hot-encoded
+##    drop_preohe (bool): boolean to decide to drop the categorical column from df
+##    
+##    Returns:
+##    pd.DataFrame, the given dataframe with the new one-hot-encoded columns
+##
+##    Raises:
+##    AssertionError: if column_name is not in df   
+##    '''
+##    assert column_name in list(df.columns)
+##    
+##    series = df[column_name]
+##    ohe = temp_build_ohe(series,column_name)
+##    ohe_columns = temp_build_ohe_columns(ohe) 
+##    df = add_ohe_columns(df, ohe_columns)
+##    if drop_preohe:
+##        df.drop(columns=[column_name],inplace=True)
+##    return df
 
 
 ## Logging the columns
@@ -492,17 +495,17 @@ def convert_boolean_to_num_column(df, boolean_column_name):
     df[boolean_column_name] = get_boolean_to_num_column(boolean_column)
     return df
 ## Inverse columns
-def get_inverse_column(column,zero_div_prevention=0.0001):
-    assert zero_div_prevention > 0
-    return 1/(column + zero_div_prevention)
-def add_inverse_column(df,column_name,zero_div_prevention=0.0001):
-    
-    assert column_name in list(df.columns)
-    column = df[column_name]
-    assert np.all(column >= 0) # the column to be inverted cannot have any negative numbers
-    inverse_column = get_inverse_column(column,zero_div_prevention)
-    df["1/"+column_name] = inverse_column
-    return df
+##def get_inverse_column(column,zero_div_prevention=0.0001):
+##    assert zero_div_prevention > 0
+##    return 1/(column + zero_div_prevention)
+##def add_inverse_column(df,column_name,zero_div_prevention=0.0001):
+##    
+##    assert column_name in list(df.columns)
+##    column = df[column_name]
+##    assert np.all(column >= 0) # the column to be inverted cannot have any negative numbers
+##    inverse_column = get_inverse_column(column,zero_div_prevention)
+##    df["1/"+column_name] = inverse_column
+##    return df
 
 
 
@@ -837,9 +840,6 @@ def temp_build_metro_cluster_columns(oa,
 def add_metro_cluster_columns(oa, metro_cluster_columns):
     oa = add_columns(oa,metro_cluster_columns)
     return oa
-
-
-
 def add_metro_cluster_columns_to_df(oa):
     '''
     Clusters all the zipcodes into N groups, then one-hot-encodes the order's orig and dest zipcodes
@@ -867,69 +867,69 @@ def add_metro_cluster_columns_to_df(oa):
 
 
 
-def temp_build_path_groupby(oa):
-    assert "DESTINATION_3DIGIT_ZIP" in list(oa.columns)
-    assert "ORIGIN_3DIGIT_ZIP" in list(oa.columns)
-    assert 'LOG(RATE_USD)' in list(oa.columns)
-    assert 'REFERENCE_NUMBERS' in list(oa.columns)
-    reference_numbers_column_name = "REFERENCE_NUMBERS"
-    
-    
-    temp_oa_collapsed_orders = oa.copy()
-
-    temp_aggdict = dict()
-    temp_oa_collapsed_orders["PATH_AVG_LOG(RATE_USD)"] = temp_oa_collapsed_orders["LOG(RATE_USD)"]
-    temp_aggdict["PATH_AVG_LOG(RATE_USD)"] = np.mean
-
-    temp_oa_collapsed_orders["PATH_ORDER_AMOUNT"] = temp_oa_collapsed_orders["REFERENCE_NUMBERS"]
-    temp_aggdict["PATH_ORDER_AMOUNT"] = "count"
-
-    if "LOG(ORDER_OFFER_AMOUNT)" in list(temp_oa_collapsed_orders.columns):
-        temp_oa_collapsed_orders["PATH_AVG_LOG(ORDER_OFFER_AMOUNT)"] = temp_oa_collapsed_orders["LOG(ORDER_OFFER_AMOUNT)"]
-        temp_aggdict["PATH_AVG_LOG(ORDER_OFFER_AMOUNT)"] = np.mean
-    else:
-        pass
-    if "ORDER_OFFER_AMOUNT" in list(temp_oa_collapsed_orders.columns):
-        temp_oa_collapsed_orders["PATH_AVG_ORDER_OFFER_AMOUNT"] = temp_oa_collapsed_orders["ORDER_OFFER_AMOUNT"]
-        temp_aggdict["PATH_AVG_ORDER_OFFER_AMOUNT"] = np.mean
-    else:
-        pass
-    if "LOG(OPER_COUNT)" in list(temp_oa_collapsed_orders.columns):
-        temp_oa_collapsed_orders["PATH_AVG_LOG(OPER_COUNT)"] = temp_oa_collapsed_orders["LOG(OPER_COUNT)"]
-        temp_aggdict["PATH_AVG_LOG(OPER_COUNT)"] = np.mean
-    else:
-        pass
-    if "LOG(TEMPERATURE)" in list(temp_oa_collapsed_orders.columns):
-        temp_oa_collapsed_orders["PATH_AVG_LOG(TEMPERATURE)"] = temp_oa_collapsed_orders["LOG(TEMPERATURE)"]
-        temp_aggdict["PATH_AVG_LOG(TEMPERATURE)"] = np.mean
-    else:
-        pass
-
-    print(temp_aggdict)
-    
-
-    temp_groupby = (
-        temp_oa_collapsed_orders
-        .groupby([#"PATH",
-                  "X_COORD_ORIG","Y_COORD_ORIG",
-                  "X_COORD_DEST","Y_COORD_DEST"],as_index=False)
-        .agg(temp_aggdict)
-    )
-    return temp_groupby
-
-def add_path_columns_to_df(oa):
-    '''
-    Adds path aggregation columns
-    This is just for visualization purposes and none of these columns should actually be used for the model
-    '''
-
-    assert 'REFERENCE_NUMBERS' in list(oa.columns)
-    temp_groupby =  temp_build_path_groupby(oa)
-    oa = oa.merge(temp_groupby,on=[
-                  "X_COORD_ORIG","Y_COORD_ORIG",
-                  "X_COORD_DEST","Y_COORD_DEST",
-                 ])
-    return oa
+##def temp_build_path_groupby(oa):
+##    assert "DESTINATION_3DIGIT_ZIP" in list(oa.columns)
+##    assert "ORIGIN_3DIGIT_ZIP" in list(oa.columns)
+##    assert 'LOG(RATE_USD)' in list(oa.columns)
+##    assert 'REFERENCE_NUMBERS' in list(oa.columns)
+##    reference_numbers_column_name = "REFERENCE_NUMBERS"
+##    
+##    
+##    temp_oa_collapsed_orders = oa.copy()
+##
+##    temp_aggdict = dict()
+##    temp_oa_collapsed_orders["PATH_AVG_LOG(RATE_USD)"] = temp_oa_collapsed_orders["LOG(RATE_USD)"]
+##    temp_aggdict["PATH_AVG_LOG(RATE_USD)"] = np.mean
+##
+##    temp_oa_collapsed_orders["PATH_ORDER_AMOUNT"] = temp_oa_collapsed_orders["REFERENCE_NUMBERS"]
+##    temp_aggdict["PATH_ORDER_AMOUNT"] = "count"
+##
+##    if "LOG(ORDER_OFFER_AMOUNT)" in list(temp_oa_collapsed_orders.columns):
+##        temp_oa_collapsed_orders["PATH_AVG_LOG(ORDER_OFFER_AMOUNT)"] = temp_oa_collapsed_orders["LOG(ORDER_OFFER_AMOUNT)"]
+##        temp_aggdict["PATH_AVG_LOG(ORDER_OFFER_AMOUNT)"] = np.mean
+##    else:
+##        pass
+##    if "ORDER_OFFER_AMOUNT" in list(temp_oa_collapsed_orders.columns):
+##        temp_oa_collapsed_orders["PATH_AVG_ORDER_OFFER_AMOUNT"] = temp_oa_collapsed_orders["ORDER_OFFER_AMOUNT"]
+##        temp_aggdict["PATH_AVG_ORDER_OFFER_AMOUNT"] = np.mean
+##    else:
+##        pass
+##    if "LOG(OPER_COUNT)" in list(temp_oa_collapsed_orders.columns):
+##        temp_oa_collapsed_orders["PATH_AVG_LOG(OPER_COUNT)"] = temp_oa_collapsed_orders["LOG(OPER_COUNT)"]
+##        temp_aggdict["PATH_AVG_LOG(OPER_COUNT)"] = np.mean
+##    else:
+##        pass
+##    if "LOG(TEMPERATURE)" in list(temp_oa_collapsed_orders.columns):
+##        temp_oa_collapsed_orders["PATH_AVG_LOG(TEMPERATURE)"] = temp_oa_collapsed_orders["LOG(TEMPERATURE)"]
+##        temp_aggdict["PATH_AVG_LOG(TEMPERATURE)"] = np.mean
+##    else:
+##        pass
+##
+##    print(temp_aggdict)
+##    
+##
+##    temp_groupby = (
+##        temp_oa_collapsed_orders
+##        .groupby([#"PATH",
+##                  "X_COORD_ORIG","Y_COORD_ORIG",
+##                  "X_COORD_DEST","Y_COORD_DEST"],as_index=False)
+##        .agg(temp_aggdict)
+##    )
+##    return temp_groupby
+##
+##def add_path_columns_to_df(oa):
+##    '''
+##    Adds path aggregation columns
+##    This is just for visualization purposes and none of these columns should actually be used for the model
+##    '''
+##
+##    assert 'REFERENCE_NUMBERS' in list(oa.columns)
+##    temp_groupby =  temp_build_path_groupby(oa)
+##    oa = oa.merge(temp_groupby,on=[
+##                  "X_COORD_ORIG","Y_COORD_ORIG",
+##                  "X_COORD_DEST","Y_COORD_DEST",
+##                 ])
+##    return oa
 
 
 def view_pca(X,y):
@@ -942,311 +942,311 @@ def view_pca(X,y):
 
 
 # Because of a lack of control with Sklearn Pipelines, custom classes for building the models were made.
-class Temp_Order_Prediction_Model_Builder:
-    def __init__(
-        self,
-        df,
-        target_column_name,
-        weight_column_name=None,
-    ):
-        '''
-        
-        '''
-        assert target_column_name in list(df.columns)
-
-
-        
-        self.df = df
-        self.target_column_name = target_column_name
-        self.weight_column_name = weight_column_name
-        #if (weight_column_name is None)==False:
-        #    assert weight_column_name in list(df.columns)
-        self.X = self.df.drop(columns=[self.target_column_name])
-        self.y = self.df[self.target_column_name]
-    def _verify_weight(self):
-        # checks if this model will be weighing by lead time.
-        if self.weight_column_name is None:
-            return False
-        else:
-            return True
-    def get_X(self):
-        # gets X (the input df of the model which lacks the target column)
-        # if we were not using weighting by lead-time, calling self.get_X() and self.X are indistinguishable
-        # but if using weighting by leadtime, self.get_X() will return X without the leadtime column
-        X = self.X
-        if self._verify_weight():
-            return X.drop(columns=[self.weight_column_name],inplace=False)
-        else:
-            return X
-    def _record_post_split_weight(self):
-        # if the weight_column_name is being used, then it must be dropped from self.X_train and recorded
-        if self._verify_weight():
-            print("sample_weights will be used")
-            weight_column_name = self.weight_column_name
-            X_train_weight_column = self.X_train[weight_column_name]
-            self.X_train = self.X_train.drop(columns=[weight_column_name])
-            self.X_test = self.X_test.drop(columns=[weight_column_name])
-            self.X_train_weight_column = X_train_weight_column
-            #self.temp_weight_column = X_train_weight_column
-            print("")
-        else:
-            pass
-    
-    def transform_y(self, y=None, inplace=False):
-        if y is None: 
-            y = self.y;
-        # y = np.log1p(y)
-        # y = np.sqrt(y)
-
-        if inplace==True: 
-            self.y = y        
-        return y
-    def transform_X(self, X=None, top_n = None,inplace=False):
-        if X is None: 
-            X = self.X;
-        if top_n is None:
-            top_n = self.get_X().shape[1]
-        
-        #top_n = 30
-        target_column_name = self.target_column_name
-        df = self.df
-        assert target_column_name in list(df.columns)
-
-        if self._verify_weight():
-            weight_column_name = self.weight_column_name
-            weight_column = df[weight_column_name]
-            df.drop(columns=[weight_column_name], inplace=True)
-        
-        top_n_correlated_selected_column_names = (
-            df.corr()[target_column_name]
-            .abs()
-            .sort_values(ascending=False)
-            .head(top_n+1).index[1:])
-        
-        self.top_n_correlated_selected_column_names = top_n_correlated_selected_column_names
-        X = X[top_n_correlated_selected_column_names]
-        
-        if self._verify_weight():
-            weight_column_name = self.weight_column_name
-            X[weight_column_name] = weight_column
-        
-        if inplace==True: 
-            self.X = X
-        return X
-    def set_split(self, X=None, y=None, stratify=None,train_test_indexer=None):
-        if X is None:
-            X = self.X
-        if y is None:
-            y = self.y
-        # train_test_indexer is a boolean array, 1 = train, 0 = test
-        if train_test_indexer is None:
-            stratify = stratify
-            np.random.seed(1)
-            X_train, X_test, y_train, y_test = train_test_split(X,y,stratify)
-        else:
-            X_train = X.loc[train_test_indexer == 1]
-            y_train = y.loc[train_test_indexer == 1]
-            X_test = X.loc[train_test_indexer == 0]
-            y_test = y.loc[train_test_indexer == 0]
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
-        self._record_post_split_weight()
-        
-    def train_model(self, model, X_train=None, y_train=None):
-        if X_train is None:
-            X_train = self.X_train
-        if y_train is None:
-            y_train = self.y_train
-        
-        if self._verify_weight():
-            
-            weight_column = self.X_train_weight_column
-            fit_params = {'sample_weight': weight_column}
-            try: 
-                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, fit_params=fit_params))
-            except:
-                print("Cross Val Scores skipped")
-            model.fit(X_train, y_train,sample_weight=weight_column)
-        else:
-            try: 
-                print("Cross Val Scores:",cross_val_score(model, X_train, y_train))
-            except:
-                print("Cross Val Scores skipped")
-            model.fit(X_train, y_train)
-        self.model = model
-        return model
-    def test_model(self, model=None,X_test=None,y_test=None):
-        if model is None:
-            model = self.model
-        if X_test is None:
-            X_test = self.X_test
-        if y_test is None:
-            y_test = self.y_test
-        predictions = model.predict(X_test)
-        return predictions
-
-class Temp_Order_Classification_Model_Builder (Temp_Order_Prediction_Model_Builder):
-    def __init__(
-        self,
-        df,
-        target_column_name,
-        class_amount = 2,
-        weight_column_name=None,
-    ):
-        super(Temp_Order_Classification_Model_Builder, self).__init__(df, target_column_name,weight_column_name)
-        self.class_amount = class_amount
-    def _split_as_n_ordinal_levels(self, y,class_amount=None):
-        if class_amount is None:
-            class_amount = 2 #4
-        percentiles = [np.percentile(y,x) for x in np.arange(0,100,100/class_amount)[1:]]
-        self.percentiles = percentiles
-        ordinals = np.zeros(y.shape[0])
-        for percentile in percentiles:
-            ordinals += (y>=percentile).astype(float)
-        y = ordinals
-        return y
-    def set_split(self, X=None, y=None, stratify=None,train_test_indexer=None):
-        if X is None:
-            X = self.X
-        if y is None:
-            y = self.y
-        if train_test_indexer is None:
-            if stratify is None:
-                stratify = self.y
-            np.random.seed(1)
-            X_train, X_test, y_train, y_test = train_test_split(X,y,stratify=stratify)
-        else:
-            X_train = X.loc[train_test_indexer == 1]
-            y_train = y.loc[train_test_indexer == 1]
-            X_test = X.loc[train_test_indexer == 0]
-            y_test = y.loc[train_test_indexer == 0]
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
-
-        #print(self.X_train.shape,self.X_test.shape,self.y_train.shape,self.y_test.shape)
-        
-        self._record_post_split_weight()
-    def transform_y(self, y=None, inplace=False
-                   ):
-        if y is None: 
-            y = self.y;
-        y = self._split_as_n_ordinal_levels(y, class_amount=self.class_amount)
-        if inplace==True: 
-            self.y = y
-        return y
-
-        
-            
-            
-
-    def train_model(self, model, X_train=None, y_train=None):
-        if X_train is None:
-            X_train = self.X_train
-        if y_train is None:
-            y_train = self.y_train
-
-        if self._verify_weight():
-            weight_column = self.X_train_weight_column
-            fit_params = {'sample_weight': weight_column}            
-            if self.class_amount == 2:
-                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True), fit_params=fit_params,scoring="roc_auc"))
-            else:
-                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True), fit_params=fit_params))
-            model.fit(X_train, y_train,sample_weight=weight_column)   
-        else:
-            if self.class_amount == 2:
-                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True),scoring="roc_auc"))
-            else:
-                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True)  ))
-            model.fit(X_train, y_train)
-        self.model = model
-        return model
-    def eval_model(self, predictions,y_test=None):
-        if y_test is None: 
-            y_test = self.y_test
-        print("Confusion Matrix:\n", confusion_matrix(y_test,predictions,normalize="true"))
-        if self.class_amount==2:
-            print("ROC AUC Score", roc_auc_score(y_test,predictions))
-            pass
-
-
-    def oversample_class_imbalance(self):
-        '''Optional function to oversample the minority class if there is class_imbalance; Performed between set_split and train_model'''
-        #temp_X_train = self.X_train
-        if self._verify_weight():
-            # add  column to x train to make things easier
-            self.X_train[self.weight_column_name] = self.X_train_weight_column
-        else:
-            pass
-        classes = list(set(self.y_train.values.tolist()))
-        class_i_X_train_dfs = [self.X_train[self.y_train==c] for c in classes]
-        class_i_X_train_amounts = [df.shape[0] for df in class_i_X_train_dfs]
-        max_class_i_X_train_amount = max(class_i_X_train_amounts)
-        for i in range(len(classes)):
-            class_value = classes[i]
-            class_i_X_train_df = class_i_X_train_dfs[i]
-            class_i_X_train_amount = class_i_X_train_amounts[i]
-            class_amount_difference = max_class_i_X_train_amount - class_i_X_train_amount
-            assert class_amount_difference >= 0
-            if class_amount_difference > 0:
-                # class i is less than class max
-                extra_class_i_X_train_df = class_i_X_train_df.sample(n=class_amount_difference,replace=True)
-                self.X_train = pd.concat([self.X_train,extra_class_i_X_train_df],axis=0)
-                self.y_train = pd.Series((self.y_train.values.tolist() + (class_value*np.ones(class_amount_difference)).tolist()),
-                                        name=self.target_column_name)
-            else:
-                # class i is equal to class max
-                pass
-        if self._verify_weight():
-            new_X_train_weight_column = self.X_train[self.weight_column_name]
-            self.X_train.drop(columns=[self.weight_column_name], inplace=True)
-            self.X_train_weight_column = new_X_train_weight_column
-        else:
-            pass
-
-class Temp_Order_Regression_Model_Builder (Temp_Order_Prediction_Model_Builder):
-    def __init__(
-        self,
-        df,
-        target_column_name,
-        weight_column_name=None,
-    ):
-        super(Temp_Order_Regression_Model_Builder, self).__init__(df, target_column_name,weight_column_name)
-    def set_split(self, X=None, y=None, stratify=None,train_test_indexer=None):
-        if X is None:
-            X = self.X
-        if y is None:
-            y = self.y
-        if train_test_indexer is None:
-            np.random.seed(1)
-            X_train, X_test, y_train, y_test = train_test_split(X,y)
-        else:
-            X_train = X.loc[train_test_indexer == 1]
-            y_train = y.loc[train_test_indexer == 1]
-            X_test = X.loc[train_test_indexer == 0]
-            y_test = y.loc[train_test_indexer == 0]
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
-        #print(self.X_train.shape,self.X_test.shape,self.y_train.shape,self.y_test.shape)
-
-        self._record_post_split_weight()
-    def transform_y(self, y=None, inplace=False,
-                    update_df=False
-):
-        if y is None: 
-            y = self.y;
-        if inplace==True: 
-            self.y = y
-        if update_df==True:
-            self.df[self.target_column_name] = y
-        return y
-    def eval_model(self, predictions,y_test=None):
-        if y_test is None: 
-            y_test = self.y_test
-        print("Corr between Regression Predicted Y & Actual Y:", np.corrcoef(predictions, (y_test))[0][1])
+##class Temp_Order_Prediction_Model_Builder:
+##    def __init__(
+##        self,
+##        df,
+##        target_column_name,
+##        weight_column_name=None,
+##    ):
+##        '''
+##        
+##        '''
+##        assert target_column_name in list(df.columns)
+##
+##
+##        
+##        self.df = df
+##        self.target_column_name = target_column_name
+##        self.weight_column_name = weight_column_name
+##        #if (weight_column_name is None)==False:
+##        #    assert weight_column_name in list(df.columns)
+##        self.X = self.df.drop(columns=[self.target_column_name])
+##        self.y = self.df[self.target_column_name]
+##    def _verify_weight(self):
+##        # checks if this model will be weighing by lead time.
+##        if self.weight_column_name is None:
+##            return False
+##        else:
+##            return True
+##    def get_X(self):
+##        # gets X (the input df of the model which lacks the target column)
+##        # if we were not using weighting by lead-time, calling self.get_X() and self.X are indistinguishable
+##        # but if using weighting by leadtime, self.get_X() will return X without the leadtime column
+##        X = self.X
+##        if self._verify_weight():
+##            return X.drop(columns=[self.weight_column_name],inplace=False)
+##        else:
+##            return X
+##    def _record_post_split_weight(self):
+##        # if the weight_column_name is being used, then it must be dropped from self.X_train and recorded
+##        if self._verify_weight():
+##            print("sample_weights will be used")
+##            weight_column_name = self.weight_column_name
+##            X_train_weight_column = self.X_train[weight_column_name]
+##            self.X_train = self.X_train.drop(columns=[weight_column_name])
+##            self.X_test = self.X_test.drop(columns=[weight_column_name])
+##            self.X_train_weight_column = X_train_weight_column
+##            #self.temp_weight_column = X_train_weight_column
+##            print("")
+##        else:
+##            pass
+##    
+##    def transform_y(self, y=None, inplace=False):
+##        if y is None: 
+##            y = self.y;
+##        # y = np.log1p(y)
+##        # y = np.sqrt(y)
+##
+##        if inplace==True: 
+##            self.y = y        
+##        return y
+##    def transform_X(self, X=None, top_n = None,inplace=False):
+##        if X is None: 
+##            X = self.X;
+##        if top_n is None:
+##            top_n = self.get_X().shape[1]
+##        
+##        #top_n = 30
+##        target_column_name = self.target_column_name
+##        df = self.df
+##        assert target_column_name in list(df.columns)
+##
+##        if self._verify_weight():
+##            weight_column_name = self.weight_column_name
+##            weight_column = df[weight_column_name]
+##            df.drop(columns=[weight_column_name], inplace=True)
+##        
+##        top_n_correlated_selected_column_names = (
+##            df.corr()[target_column_name]
+##            .abs()
+##            .sort_values(ascending=False)
+##            .head(top_n+1).index[1:])
+##        
+##        self.top_n_correlated_selected_column_names = top_n_correlated_selected_column_names
+##        X = X[top_n_correlated_selected_column_names]
+##        
+##        if self._verify_weight():
+##            weight_column_name = self.weight_column_name
+##            X[weight_column_name] = weight_column
+##        
+##        if inplace==True: 
+##            self.X = X
+##        return X
+##    def set_split(self, X=None, y=None, stratify=None,train_test_indexer=None):
+##        if X is None:
+##            X = self.X
+##        if y is None:
+##            y = self.y
+##        # train_test_indexer is a boolean array, 1 = train, 0 = test
+##        if train_test_indexer is None:
+##            stratify = stratify
+##            np.random.seed(1)
+##            X_train, X_test, y_train, y_test = train_test_split(X,y,stratify)
+##        else:
+##            X_train = X.loc[train_test_indexer == 1]
+##            y_train = y.loc[train_test_indexer == 1]
+##            X_test = X.loc[train_test_indexer == 0]
+##            y_test = y.loc[train_test_indexer == 0]
+##        self.X_train = X_train
+##        self.X_test = X_test
+##        self.y_train = y_train
+##        self.y_test = y_test
+##        self._record_post_split_weight()
+##        
+##    def train_model(self, model, X_train=None, y_train=None):
+##        if X_train is None:
+##            X_train = self.X_train
+##        if y_train is None:
+##            y_train = self.y_train
+##        
+##        if self._verify_weight():
+##            
+##            weight_column = self.X_train_weight_column
+##            fit_params = {'sample_weight': weight_column}
+##            try: 
+##                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, fit_params=fit_params))
+##            except:
+##                print("Cross Val Scores skipped")
+##            model.fit(X_train, y_train,sample_weight=weight_column)
+##        else:
+##            try: 
+##                print("Cross Val Scores:",cross_val_score(model, X_train, y_train))
+##            except:
+##                print("Cross Val Scores skipped")
+##            model.fit(X_train, y_train)
+##        self.model = model
+##        return model
+##    def test_model(self, model=None,X_test=None,y_test=None):
+##        if model is None:
+##            model = self.model
+##        if X_test is None:
+##            X_test = self.X_test
+##        if y_test is None:
+##            y_test = self.y_test
+##        predictions = model.predict(X_test)
+##        return predictions
+##
+##class Temp_Order_Classification_Model_Builder (Temp_Order_Prediction_Model_Builder):
+##    def __init__(
+##        self,
+##        df,
+##        target_column_name,
+##        class_amount = 2,
+##        weight_column_name=None,
+##    ):
+##        super(Temp_Order_Classification_Model_Builder, self).__init__(df, target_column_name,weight_column_name)
+##        self.class_amount = class_amount
+##    def _split_as_n_ordinal_levels(self, y,class_amount=None):
+##        if class_amount is None:
+##            class_amount = 2 #4
+##        percentiles = [np.percentile(y,x) for x in np.arange(0,100,100/class_amount)[1:]]
+##        self.percentiles = percentiles
+##        ordinals = np.zeros(y.shape[0])
+##        for percentile in percentiles:
+##            ordinals += (y>=percentile).astype(float)
+##        y = ordinals
+##        return y
+##    def set_split(self, X=None, y=None, stratify=None,train_test_indexer=None):
+##        if X is None:
+##            X = self.X
+##        if y is None:
+##            y = self.y
+##        if train_test_indexer is None:
+##            if stratify is None:
+##                stratify = self.y
+##            np.random.seed(1)
+##            X_train, X_test, y_train, y_test = train_test_split(X,y,stratify=stratify)
+##        else:
+##            X_train = X.loc[train_test_indexer == 1]
+##            y_train = y.loc[train_test_indexer == 1]
+##            X_test = X.loc[train_test_indexer == 0]
+##            y_test = y.loc[train_test_indexer == 0]
+##        self.X_train = X_train
+##        self.X_test = X_test
+##        self.y_train = y_train
+##        self.y_test = y_test
+##
+##        #print(self.X_train.shape,self.X_test.shape,self.y_train.shape,self.y_test.shape)
+##        
+##        self._record_post_split_weight()
+##    def transform_y(self, y=None, inplace=False
+##                   ):
+##        if y is None: 
+##            y = self.y;
+##        y = self._split_as_n_ordinal_levels(y, class_amount=self.class_amount)
+##        if inplace==True: 
+##            self.y = y
+##        return y
+##
+##        
+##            
+##            
+##
+##    def train_model(self, model, X_train=None, y_train=None):
+##        if X_train is None:
+##            X_train = self.X_train
+##        if y_train is None:
+##            y_train = self.y_train
+##
+##        if self._verify_weight():
+##            weight_column = self.X_train_weight_column
+##            fit_params = {'sample_weight': weight_column}            
+##            if self.class_amount == 2:
+##                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True), fit_params=fit_params,scoring="roc_auc"))
+##            else:
+##                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True), fit_params=fit_params))
+##            model.fit(X_train, y_train,sample_weight=weight_column)   
+##        else:
+##            if self.class_amount == 2:
+##                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True),scoring="roc_auc"))
+##            else:
+##                print("Cross Val Scores:",cross_val_score(model, X_train, y_train, cv=StratifiedKFold(n_splits=4,shuffle=True)  ))
+##            model.fit(X_train, y_train)
+##        self.model = model
+##        return model
+##    def eval_model(self, predictions,y_test=None):
+##        if y_test is None: 
+##            y_test = self.y_test
+##        print("Confusion Matrix:\n", confusion_matrix(y_test,predictions,normalize="true"))
+##        if self.class_amount==2:
+##            print("ROC AUC Score", roc_auc_score(y_test,predictions))
+##            pass
+##
+##
+##    def oversample_class_imbalance(self):
+##        '''Optional function to oversample the minority class if there is class_imbalance; Performed between set_split and train_model'''
+##        #temp_X_train = self.X_train
+##        if self._verify_weight():
+##            # add  column to x train to make things easier
+##            self.X_train[self.weight_column_name] = self.X_train_weight_column
+##        else:
+##            pass
+##        classes = list(set(self.y_train.values.tolist()))
+##        class_i_X_train_dfs = [self.X_train[self.y_train==c] for c in classes]
+##        class_i_X_train_amounts = [df.shape[0] for df in class_i_X_train_dfs]
+##        max_class_i_X_train_amount = max(class_i_X_train_amounts)
+##        for i in range(len(classes)):
+##            class_value = classes[i]
+##            class_i_X_train_df = class_i_X_train_dfs[i]
+##            class_i_X_train_amount = class_i_X_train_amounts[i]
+##            class_amount_difference = max_class_i_X_train_amount - class_i_X_train_amount
+##            assert class_amount_difference >= 0
+##            if class_amount_difference > 0:
+##                # class i is less than class max
+##                extra_class_i_X_train_df = class_i_X_train_df.sample(n=class_amount_difference,replace=True)
+##                self.X_train = pd.concat([self.X_train,extra_class_i_X_train_df],axis=0)
+##                self.y_train = pd.Series((self.y_train.values.tolist() + (class_value*np.ones(class_amount_difference)).tolist()),
+##                                        name=self.target_column_name)
+##            else:
+##                # class i is equal to class max
+##                pass
+##        if self._verify_weight():
+##            new_X_train_weight_column = self.X_train[self.weight_column_name]
+##            self.X_train.drop(columns=[self.weight_column_name], inplace=True)
+##            self.X_train_weight_column = new_X_train_weight_column
+##        else:
+##            pass
+##
+##class Temp_Order_Regression_Model_Builder (Temp_Order_Prediction_Model_Builder):
+##    def __init__(
+##        self,
+##        df,
+##        target_column_name,
+##        weight_column_name=None,
+##    ):
+##        super(Temp_Order_Regression_Model_Builder, self).__init__(df, target_column_name,weight_column_name)
+##    def set_split(self, X=None, y=None, stratify=None,train_test_indexer=None):
+##        if X is None:
+##            X = self.X
+##        if y is None:
+##            y = self.y
+##        if train_test_indexer is None:
+##            np.random.seed(1)
+##            X_train, X_test, y_train, y_test = train_test_split(X,y)
+##        else:
+##            X_train = X.loc[train_test_indexer == 1]
+##            y_train = y.loc[train_test_indexer == 1]
+##            X_test = X.loc[train_test_indexer == 0]
+##            y_test = y.loc[train_test_indexer == 0]
+##        self.X_train = X_train
+##        self.X_test = X_test
+##        self.y_train = y_train
+##        self.y_test = y_test
+##        #print(self.X_train.shape,self.X_test.shape,self.y_train.shape,self.y_test.shape)
+##
+##        self._record_post_split_weight()
+##    def transform_y(self, y=None, inplace=False,
+##                    update_df=False
+##):
+##        if y is None: 
+##            y = self.y;
+##        if inplace==True: 
+##            self.y = y
+##        if update_df==True:
+##            self.df[self.target_column_name] = y
+##        return y
+##    def eval_model(self, predictions,y_test=None):
+##        if y_test is None: 
+##            y_test = self.y_test
+##        print("Corr between Regression Predicted Y & Actual Y:", np.corrcoef(predictions, (y_test))[0][1])
