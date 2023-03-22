@@ -90,7 +90,7 @@ class Metro_Cluster:
         self.group_amount = group_amount
         self.group_column_name = group_column_name
         
-    def plot_map(self, custom_cmap="Spectral"):
+    def plot_map(self, path_folder,custom_cmap="Spectral"):
         """
         
         """
@@ -122,6 +122,7 @@ class Metro_Cluster:
                     edgecolors='black')
         ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
         plt.show()
+        fig.savefig(os.path.join(path_folder,'generated_visualizations','metro_clusters.png'),bbox_inches='tight')
         return ax
             
          
@@ -163,7 +164,7 @@ class Metro_Cluster:
             cluster_df[self.x_column_name] = temp_df_x_column.values
             cluster_df[self.y_column_name] = temp_df_y_column.values
         
-        self.plot_map()
+        #self.plot_map()
 
         self.cluster_df = cluster_df
         self.centroid_y_column_name = centroid_y_column_name
@@ -1250,3 +1251,24 @@ def view_pca(X,y):
 ##        if y_test is None: 
 ##            y_test = self.y_test
 ##        print("Corr between Regression Predicted Y & Actual Y:", np.corrcoef(predictions, (y_test))[0][1])
+
+
+
+def plot_model_pipeline_feature_importances(model_pipeline, path_folder, plotname):
+    # feature importances
+    try:
+        model_feature_importances = np.abs(model_pipeline.named_steps["model"].coef_.flatten())
+    except:
+        model_feature_importances = model_pipeline.named_steps["model"].feature_importances_
+    #model_feature_importances = model_pipeline.named_steps["model"].feature_importances_
+    model_feature_names = model_pipeline.named_steps["preprocessor_pipeline"].get_feature_names_out()
+    fig, ax = plt.subplots(figsize=(10,5))
+    pd.Series(
+        index=model_feature_names,
+        data=model_feature_importances,
+    ).sort_values(ascending=False).head(15)[::-1].plot(kind="barh",ax=ax)
+    ax.set_title(plotname.split('.')[0].replace("_"," ").upper())
+    fig.savefig(os.path.join(path_folder,'generated_visualizations',plotname),bbox_inches='tight')
+    plt.show()
+    return fig, ax
+

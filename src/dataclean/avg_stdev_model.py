@@ -39,6 +39,8 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import ConfusionMatrixDisplay
+
 from sklearn.model_selection import cross_val_score
 
 from sklearn.linear_model import LogisticRegression
@@ -119,10 +121,21 @@ def dataclean(args):
     do_zscore = 0
 
     include_geodata_columns = 0
-    only_mainland_us = 0
+    only_mainland_us = 0 # always keep 0 to keep chicago
     do_shared_train_test_split = 1
     drop_prelogged = 0
     model_soph = 1
+
+    # linear regression
+    # no pca
+    # standard scaling
+    # 
+    # pool, num
+    # with path geodata -> not helpful to stdev
+    # only mainland
+    # estimate cost
+    # consecutive predictive columns
+    # statistical testing
 
     include_zipcode_coords_columns = 1
     include_metro_cluster_columns = 1
@@ -441,6 +454,7 @@ def dataclean(args):
     if include_metro_cluster_columns:
         # adds the set of columns that encode the origin zipcode of an order to different metropolitan region groups
         metro_cluster = util.temp_build_metro_cluster(oa)
+        metro_cluster.plot_map(path_folder=path_folder)
         orig_proximity_column_names = ["ORIG_"+metro_cluster.group_column_name+"="+str(i) for i in range(metro_cluster.group_amount)]
         orig_metro_cluster_columns = util.temp_build_metro_cluster_columns(oa, metro_cluster,"X_COORD_ORIG","Y_COORD_ORIG",orig_proximity_column_names)
         oa = util.add_metro_cluster_columns(oa, orig_metro_cluster_columns)
@@ -611,19 +625,12 @@ def dataclean(args):
     ax.set_xlabel("Actual Avg Rates Test Y-values")
     ax.set_ylabel("Predicted Avg Rates Test Y-values")
     ax.scatter(y_test,predictions,alpha=0.3,s=5)
+    fig.savefig(os.path.join(path_folder,'generated_visualizations','avg_model_r2_scatter.png'),bbox_inches='tight')
 
 
 
-    # feature importances    
-    avg_feature_importances = avg_pipeline.named_steps["model"].coef_.flatten()
-    avg_feature_names = avg_pipeline.named_steps["preprocessor_pipeline"].get_feature_names_out()
-    fig, ax = plt.subplots()
-    pd.Series(
-        index=avg_feature_names,
-        data=avg_feature_importances,
-    ).sort_values(ascending=False).head(15)[::-1].plot(kind="barh",ax=ax)
-    ax.set_title("Top 15 Influential Features to Avg")
-    plt.show()
+    # feature importances
+    util.plot_model_pipeline_feature_importances(avg_pipeline, path_folder, 'avg_model_feature_importances.png')
     
     # now, this next part is for stdev model
     # this just repeats the same things that the avg model did.
@@ -687,143 +694,151 @@ def dataclean(args):
     ax.scatter(Z[:,0],Z[:,1],c=y,alpha=0.5,s=5)
     plt.show()
 
-
+    confmatplotter = ConfusionMatrixDisplay(confusion_matrix(y_test,predictions,normalize="true"))
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.set_title("Test Set SD Model Confusion Matrix")
+    confmatplotter.plot(ax=ax)
+    fig.savefig(os.path.join(path_folder, "generated_visualizations","sd_model_confusion_matrix.png"))
     # feature importances    
-    sd_feature_importances = sd_pipeline.named_steps["model"].feature_importances_
-    sd_feature_names = sd_pipeline.named_steps["preprocessor_pipeline"].get_feature_names_out()
-    fig, ax = plt.subplots(figsize=(10,5))
-    pd.Series(
-        index=sd_feature_names,
-        data=sd_feature_importances,
-    ).sort_values(ascending=False).head(15)[::-1].plot(kind="barh",ax=ax)
-    ax.set_title("Top 15 Influential Features to StDev")
+    util.plot_model_pipeline_feature_importances(sd_pipeline, path_folder, 'sd_model_feature_importances.png')
+
+
+##    # statistical testing
+##    do_statistical_testing = 0
+##    if do_statistical_testing:
+##        
+##        from scipy.stats import permutation_test
+##        numerical_column_names_ = numerical_column_names_0 + numerical_column_names_1 + numerical_column_names_2
+##        for numerical_column_name in numerical_column_names_:
+##            numerical_column = sd_X[numerical_column_name]
+##            binary_column = y
+##            # Compute the absolute difference of the group-wise means
+##            observed_diff = np.abs(np.mean(numerical_column[y == 1]) - np.mean(numerical_column[y == 0]))
+##            # Run a permutation test with 1000 permutations
+##            perm_diffs = []
+##            for i in range(50):
+##                perm_binary_column = np.random.permutation(binary_column)
+##                perm_diff = abs(np.mean(numerical_column[perm_binary_column == 1]) - np.mean(numerical_column[perm_binary_column == 0]))
+##                perm_diffs.append(perm_diff)
+##
+##            p_value = np.mean(perm_diffs>=observed_diff)
+##            print(numerical_column_name, "P-value:", p_value)
+        
+
+
+    # num model
+    # Define the pipeline with preprocessor and PCA
+    num_pipeline = Pipeline([
+        ('preprocessor_pipeline', preprocessor),
+        #('pca', PCA(n_components=10)),
+        #('model',LogisticRegression(class_weight="balanced"))
+        ('model',RandomForestClassifier(10,class_weight="balanced"))
+    ])
+
+    np.random.seed(1)
+    target_column_name="ORDER_OFFER_AMOUNT"
+    #if include_lead_time: target_column_names += [weight_column_name]
+    temp_target_column_names = target_column_names.copy()
+    temp_target_column_names.remove(target_column_name)
+    #if weighing_by_lead_time: temp_target_column_names.remove(weight_column_name)
+    input_df = oa.drop(columns=temp_target_column_names)
+    temp_train_test_indexer = np.random.choice([1,0],size=input_df.shape[0],p=[4/5,1/5])
+    X = input_df.drop(columns=[target_column_name])
+    num_X = X
+    num_median = np.median(input_df[target_column_name])
+    y = (input_df[target_column_name]>num_median).astype(int)
+    print("num_median:",num_median)
+    X_train = X.loc[temp_train_test_indexer == 1]
+    y_train = y.loc[temp_train_test_indexer == 1]
+    X_test = X.loc[temp_train_test_indexer == 0]
+    y_test = y.loc[temp_train_test_indexer == 0]
+    if weighing_by_lead_time:
+        X_train_weight_column = X_train[weight_column_name]
+        X_train.drop(columns=[weight_column_name],inplace=True)
+        X_test.drop(columns=[weight_column_name],inplace=True)
+    if weighing_by_lead_time:
+        fit_params = {"model__sample_weight":X_train_weight_column}
+        num_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
+    else:
+        num_pipeline.fit(X_train,y_train)
+    predictions = num_pipeline.predict(X_test)
+    print("Accuracy of Num Model:", np.mean(predictions==y_test))
+    print("Num Model Confusion Matrix:")
+    print(confusion_matrix(y_test,predictions,normalize="true"))
+    print("ROC AUC Score of Num Model:", roc_auc_score(y_test,predictions))
+
+    # PCA
+    preprocessed_X = preprocessor_pipeline.transform(num_X)
+    Z = PCA(2).fit_transform(preprocessed_X)
+    fig, ax = plt.subplots()
+    ax.scatter(Z[:,0],Z[:,1],c=y,alpha=0.5,s=5)
     plt.show()
 
 
-##    # num model
-##    # Define the pipeline with preprocessor and PCA
-##    num_pipeline = Pipeline([
-##        ('preprocessor_pipeline', preprocessor),
-##        #('pca', PCA(n_components=10)),
-##        #('model',LogisticRegression(class_weight="balanced"))
-##        ('model',RandomForestClassifier(10,class_weight="balanced"))
-##    ])
-##
-##    np.random.seed(1)
-##    target_column_name="ORDER_OFFER_AMOUNT"
-##    #if include_lead_time: target_column_names += [weight_column_name]
-##    temp_target_column_names = target_column_names.copy()
-##    temp_target_column_names.remove(target_column_name)
-##    #if weighing_by_lead_time: temp_target_column_names.remove(weight_column_name)
-##    input_df = oa.drop(columns=temp_target_column_names)
-##    temp_train_test_indexer = np.random.choice([1,0],size=input_df.shape[0],p=[4/5,1/5])
-##    X = input_df.drop(columns=[target_column_name])
-##    num_X = X
-##    num_median = np.median(input_df[target_column_name])
-##    y = (input_df[target_column_name]>num_median).astype(int)
-##    print("num_median:",num_median)
-##    X_train = X.loc[temp_train_test_indexer == 1]
-##    y_train = y.loc[temp_train_test_indexer == 1]
-##    X_test = X.loc[temp_train_test_indexer == 0]
-##    y_test = y.loc[temp_train_test_indexer == 0]
-##    if weighing_by_lead_time:
-##        X_train_weight_column = X_train[weight_column_name]
-##        X_train.drop(columns=[weight_column_name],inplace=True)
-##        X_test.drop(columns=[weight_column_name],inplace=True)
-##    if weighing_by_lead_time:
-##        fit_params = {"model__sample_weight":X_train_weight_column}
-##        num_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
-##    else:
-##        num_pipeline.fit(X_train,y_train)
-##    predictions = num_pipeline.predict(X_test)
-##    print("Accuracy of Num Model:", np.mean(predictions==y_test))
-##    print("Num Model Confusion Matrix:")
-##    print(confusion_matrix(y_test,predictions,normalize="true"))
-##    print("ROC AUC Score of Num Model:", roc_auc_score(y_test,predictions))
-##
-##    # PCA
-##    preprocessed_X = preprocessor_pipeline.transform(num_X)
-##    Z = PCA(2).fit_transform(preprocessed_X)
-##    fig, ax = plt.subplots()
-##    ax.scatter(Z[:,0],Z[:,1],c=y,alpha=0.5,s=5)
-##    plt.show()
-##
-##
-##    # feature importances    
-##    num_feature_importances = num_pipeline.named_steps["model"].feature_importances_
-##    num_feature_names = num_pipeline.named_steps["preprocessor_pipeline"].get_feature_names_out()
-##    fig, ax = plt.subplots(figsize=(10,5))
-##    pd.Series(
-##        index=num_feature_names,
-##        data=num_feature_importances,
-##    ).sort_values(ascending=False).head(15)[::-1].plot(kind="barh",ax=ax)
-##    ax.set_title("Top 15 Influential Features to Num")
-##    plt.show()
-##
-##    # pooled model
-##    # Define the pipeline with preprocessor and PCA
-##    pooled_pipeline = Pipeline([
-##        ('preprocessor_pipeline', preprocessor),
-##        #('pca', PCA(n_components=10)),
-##        #('model',LogisticRegression(class_weight="balanced"))
-##        ('model',RandomForestClassifier(10,class_weight="balanced"))
-##    ])
-##
-##    np.random.seed(1)
-##    target_column_name="OFFER_TYPE_IS_POOLED"
-##    #if include_lead_time: target_column_names += [weight_column_name]
-##    temp_target_column_names = target_column_names.copy()
-##    temp_target_column_names.remove(target_column_name)
-##    #if weighing_by_lead_time: temp_target_column_names.remove(weight_column_name)
-##    input_df = oa.drop(columns=temp_target_column_names)
-##    temp_train_test_indexer = np.random.choice([1,0],size=input_df.shape[0],p=[4/5,1/5])
-##    X = input_df.drop(columns=[target_column_name])
-##    pooled_X = X
-##    pooled_median = np.median(input_df[target_column_name])
-##    y = (input_df[target_column_name]>pooled_median).astype(int)
-##    print("pooled_median:",pooled_median)
-##    X_train = X.loc[temp_train_test_indexer == 1]
-##    y_train = y.loc[temp_train_test_indexer == 1]
-##    X_test = X.loc[temp_train_test_indexer == 0]
-##    y_test = y.loc[temp_train_test_indexer == 0]
-##    if weighing_by_lead_time:
-##        X_train_weight_column = X_train[weight_column_name]
-##        X_train.drop(columns=[weight_column_name],inplace=True)
-##        X_test.drop(columns=[weight_column_name],inplace=True)
-##    if weighing_by_lead_time:
-##        fit_params = {"model__sample_weight":X_train_weight_column}
-##        pooled_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
-##    else:
-##        pooled_pipeline.fit(X_train,y_train)
-##    predictions = pooled_pipeline.predict(X_test)
-##    print("Accuracy of Pooled Model:", np.mean(predictions==y_test))
-##    print("Pooled Model Confusion Matrix:")
-##    print(confusion_matrix(y_test,predictions,normalize="true"))
-##    print("ROC AUC Score of Pooled Model:", roc_auc_score(y_test,predictions))
-##    # PCA
-##    preprocessed_X = preprocessor_pipeline.transform(pooled_X)
-##    Z = PCA(2).fit_transform(preprocessed_X)
-##    fig, ax = plt.subplots()
-##    ax.scatter(Z[:,0],Z[:,1],c=y,alpha=0.5,s=5)
-##    plt.show()
-##    # feature importances    
-##    pooled_feature_importances = pooled_pipeline.named_steps["model"].feature_importances_
-##    pooled_feature_names = pooled_pipeline.named_steps["preprocessor_pipeline"].get_feature_names_out()
-##    fig, ax = plt.subplots(figsize=(10,5))
-##    pd.Series(
-##        index=pooled_feature_names,
-##        data=pooled_feature_importances,
-##    ).sort_values(ascending=False).head(15)[::-1].plot(kind="barh",ax=ax)
-##    ax.set_title("Top 15 Influential Features to Pooled")
-##    plt.show()
+    # feature importances
+    util.plot_model_pipeline_feature_importances(num_pipeline, path_folder, 'num_model_feature_importances.png')
+
+    # pooled model
+    # Define the pipeline with preprocessor and PCA
+    pooled_pipeline = Pipeline([
+        ('preprocessor_pipeline', preprocessor),
+        #('pca', PCA(n_components=10)),
+        #('model',LogisticRegression(class_weight="balanced"))
+        ('model',RandomForestClassifier(10,class_weight="balanced"))
+    ])
+
+    np.random.seed(1)
+    target_column_name="OFFER_TYPE_IS_POOLED"
+    #if include_lead_time: target_column_names += [weight_column_name]
+    temp_target_column_names = target_column_names.copy()
+    temp_target_column_names.remove(target_column_name)
+    #if weighing_by_lead_time: temp_target_column_names.remove(weight_column_name)
+    input_df = oa.drop(columns=temp_target_column_names)
+    temp_train_test_indexer = np.random.choice([1,0],size=input_df.shape[0],p=[4/5,1/5])
+    X = input_df.drop(columns=[target_column_name])
+    pooled_X = X
+    pooled_median = np.median(input_df[target_column_name])
+    y = (input_df[target_column_name]>pooled_median).astype(int)
+    print("pooled_median:",pooled_median)
+    X_train = X.loc[temp_train_test_indexer == 1]
+    y_train = y.loc[temp_train_test_indexer == 1]
+    X_test = X.loc[temp_train_test_indexer == 0]
+    y_test = y.loc[temp_train_test_indexer == 0]
+    if weighing_by_lead_time:
+        X_train_weight_column = X_train[weight_column_name]
+        X_train.drop(columns=[weight_column_name],inplace=True)
+        X_test.drop(columns=[weight_column_name],inplace=True)
+    if weighing_by_lead_time:
+        fit_params = {"model__sample_weight":X_train_weight_column}
+        pooled_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
+    else:
+        pooled_pipeline.fit(X_train,y_train)
+    predictions = pooled_pipeline.predict(X_test)
+    print("Accuracy of Pooled Model:", np.mean(predictions==y_test))
+    print("Pooled Model Confusion Matrix:")
+    print(confusion_matrix(y_test,predictions,normalize="true"))
+    print("ROC AUC Score of Pooled Model:", roc_auc_score(y_test,predictions))
+    # PCA
+    preprocessed_X = preprocessor_pipeline.transform(pooled_X)
+    Z = PCA(2).fit_transform(preprocessed_X)
+    fig, ax = plt.subplots()
+    ax.scatter(Z[:,0],Z[:,1],c=y,alpha=0.5,s=5)
+    plt.show()
+    # 
+    confmatplotter = ConfusionMatrixDisplay(confusion_matrix(y_test,predictions,normalize="true"))
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.set_title("Test Set Pooled Model Confusion Matrix")
+    confmatplotter.plot(ax=ax)
+    fig.savefig(os.path.join(path_folder, "generated_visualizations","pooled_model_confusion_matrix.png"))
+    # feature importances
+    util.plot_model_pipeline_feature_importances(pooled_pipeline, path_folder, 'pooled_model_feature_importances.png')
 
 
-
-
+    #print(list(X.columns))
 
 
     
-
+    #assert False
 
 
     get_sd_by_tier = np.vectorize(lambda x: sd_median*int(x))
