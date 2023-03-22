@@ -112,8 +112,9 @@ class Metro_Cluster:
                 temp_df[self.y_column_name],
                 c=np.array([temp_color]),
                 label=str(temp_group),
-                s=5,
-                alpha=0.6,
+                s=10,
+                alpha=0.8,
+                #edgecolors='black'
             )
             patches.append(mpatches.Patch(color=temp_color, label=str(temp_group)))
         fig.suptitle("Zipcodes clustered into Groups i.e. Metropolitan Regions")
@@ -1262,6 +1263,7 @@ def plot_model_pipeline_feature_importances(model_pipeline, path_folder, plotnam
         model_feature_importances = model_pipeline.named_steps["model"].feature_importances_
     #model_feature_importances = model_pipeline.named_steps["model"].feature_importances_
     model_feature_names = model_pipeline.named_steps["preprocessor_pipeline"].get_feature_names_out()
+    model_feature_names = np.array([column_name.split("__")[-1] for column_name in list(model_feature_names)])
     fig, ax = plt.subplots(figsize=(10,5))
     pd.Series(
         index=model_feature_names,

@@ -73,12 +73,12 @@ def main_clear(args):
     path_folder_data_temp = os.path.join(path_folder_data,"temp")
     path_folder_data_out = os.path.join(path_folder_data,"out")
     path_folders_data = [path_folder_data_raw,path_folder_data_temp,path_folder_data_out]
-    for path_folder_data in path_folders_data:
-        for filename in os.listdir(path_folder_data):
+    for path_folder_i_data in path_folders_data:
+        for filename in os.listdir(path_folder_i_data):
             if filename in [".gitignore.txt", "stub.txt"]:
                 print("gitignore")
                 continue
-            path_file = os.path.join(path_folder_data_raw, filename)
+            path_file = os.path.join(path_folder_i_data, filename)
             try:
                 os.remove(path_file)
             except:
@@ -92,7 +92,7 @@ def main_clear(args):
                     os.rmdir(path_inner_folder)
                 except:
                     pass
-        print(os.listdir(path_folder_data_raw))
+        print(os.listdir(path_folder_i_data))
 
 def main(targets):
     #base_path_folder = "../../"

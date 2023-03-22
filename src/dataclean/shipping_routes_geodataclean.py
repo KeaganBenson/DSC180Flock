@@ -492,21 +492,28 @@ def temp_build_routes_df(args,orders_df):
 
     #args = {"path_folder_data":os.path.join(path_folder,"data")}
     carrier_gdf = get_operating_zip3_buffers_gdf(args)
-
+    print("carrier_gdf.shape=",carrier_gdf.shape)
     county_weather_df_monthly = get_county_weather_df_monthly(args)
+    print("county_weather_df_monthly.shape=",county_weather_df_monthly.shape)
     area_gdf = get_county_gdf(args)
+    print("area_gdf.shape=",area_gdf.shape)
     census_df = get_county_census_df(args)
+    print("census_df.shape=",census_df.shape)
+
 
     county_weather_df_monthly = util.add_log_column_to_df(county_weather_df_monthly,"PRECIPITATION",drop_prelogged=True)
     county_weather_df_monthly = util.add_log_column_to_df(county_weather_df_monthly,"TEMPERATURE",drop_prelogged=True)
-
+    print("county_weather_df_monthly.shape=",county_weather_df_monthly.shape)
     area_gdf = util.add_log_column_to_df(area_gdf,"ALAND",drop_prelogged=True)
+    print("area_gdf.shape=",area_gdf.shape)
 
     census_df = util.add_log_column_to_df(census_df,"POPULATION",drop_prelogged=True)
+    print("census_df.shape=",census_df.shape)
 
     area_gdf = area_gdf.merge(census_df,on=["COUNTY_NAME"])
     zero_div_prevention = 0.0001
     area_gdf["POPULATION_DENSITY"] = area_gdf["LOG(POPULATION)"]/(area_gdf["LOG(ALAND)"]+zero_div_prevention)
+    print("area_gdf.shape=",area_gdf.shape)
 
 
     x_coord_orig_column_name = "X_COORD_ORIG"
@@ -524,6 +531,8 @@ def temp_build_routes_df(args,orders_df):
     point_df_name="point_orig_df",
     inplace=True
     )
+    print("point_orig_df.head(1)=",point_orig_df.head(1))
+    print("point_orig_df.shape=",point_orig_df.shape)
 
     point_dest_df = temp_path_builder.build_point_df(
     x_coord_column_name=x_coord_dest_column_name, 
@@ -532,43 +541,57 @@ def temp_build_routes_df(args,orders_df):
     point_df_name="point_dest_df",
     inplace=True
     )
+    print("point_dest_df.head(1)=",point_dest_df.head(1))
+    print("point_dest_df.shape=",point_dest_df.shape)
 
     path_df = temp_path_builder.build_path_df(
     point_orig_df=point_orig_df, 
     point_dest_df=point_dest_df, 
     inplace=True
     )
+    print("path_df.head(1)=",path_df.head(1))
+    print("path_df.shape=",path_df.shape)
 
     path_gdf = temp_path_builder.build_path_gdf(inplace=True)
+    print("path_gdf.shape=",path_gdf.shape)
 
     ###
     print("Spatially Joining County Polygons against Shipping Route Polylines. This may take 5 to 8 minutes")
     path_area_gdf = temp_path_builder.build_path_area_gdf(area_gdf=area_gdf,inplace=False)
+    print("path_area_gdf.shape=",path_area_gdf.shape)
     path_area_df = temp_path_builder.build_path_area_df(path_area_gdf=path_area_gdf,inplace=True)
+    print("path_area_df.shape=",path_area_df.shape)
     del path_area_gdf
     print("Completed Joining County Polygons against Shipping Route Polylines")
     ###
     print("Spatially Joining Operating Zipcode Buffers against Shipping Route Polylines. This may take 5 to 8 minutes")
 
     path_oper_gdf = temp_path_builder.build_path_area_gdf(area_gdf=carrier_gdf,path_area_gdf_name="path_oper_gdf",inplace=False)
+    print("path_oper_gdf.shape=",path_oper_gdf.shape)
     print("Completed Joining Operating Zipcode Buffers against Shipping Route Polylines")
 
-
+    print("groupby path_oper_gdf to make path_oper_count")
     path_oper_count = path_oper_gdf.groupby(
         ["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"],
         as_index=False
     ).agg({"OPER_COUNT": np.sum})
     print("Exploding Months per Order")
     orders_df_monthly = explode_orders_monthly(orders_df)
+    print("orders_df_monthly.shape=",orders_df_monthly.shape)
 
+    print("merging orders_df_monthly & path_area_df to make orders_area_df")
     orders_area_df = orders_df_monthly.merge(
         path_area_df,
         on=[x_coord_orig_column_name,y_coord_orig_column_name,
             x_coord_dest_column_name,y_coord_dest_column_name]
             )
+    print("orders_area_df.shape=",orders_area_df.shape)
 
+    print("merging orders_area_df & county_weather_df_monthly to make orders_weather_df")
     orders_weather_df = orders_area_df.merge(county_weather_df_monthly,on=["COUNTY_NAME","MONTH"])
+    print("orders_weather_df.shape=",orders_weather_df.shape)
 
+    print("groupby orders_weather_df to make orders_df_final")
     orders_df_final = orders_weather_df.groupby(
         ["REFERENCE_NUMBER"],as_index=False
     ).agg({
@@ -578,18 +601,25 @@ def temp_build_routes_df(args,orders_df):
         "LOG(TEMPERATURE)": np.mean,
         "LOG(PRECIPITATION)": np.mean,
         })
+    print("orders_df_final.shape=",orders_df_final.shape)
 
-
+    print("merging orders_df & path_oper_count to make orders_df_path_carriers_amount")
     orders_df_path_carriers_amount = (
         orders_df[["REFERENCE_NUMBER","X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]]
     ).merge(path_oper_count,
                     on=["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]
     )[["REFERENCE_NUMBER","OPER_COUNT"]]
+    print("orders_df_path_carriers_amount.shape=",orders_df_path_carriers_amount.shape)
+
     orders_df_path_carriers_amount = util.add_log_column_to_df(orders_df_path_carriers_amount, column_name="OPER_COUNT",drop_prelogged=True)
+    print("merging orders_df_final & orders_df_path_carriers_amount to make orders_df_final")
+
     orders_df_final = orders_df_final.merge(orders_df_path_carriers_amount,on=["REFERENCE_NUMBER"])
+    print("orders_df_final.shape=",orders_df_final.shape)
 
     file_name_route_data = "paths_geoenriched.csv"
     path_file_route_data = os.path.join(path_folder_data_temp, file_name_route_data)
-    #orders_df_final.to_csv(path_file_route_data,index=False)
+    orders_df_final.to_csv(path_file_route_data,index=False)
+    #assert False
     return orders_df_final
 

@@ -117,10 +117,10 @@ def dataclean(args):
     bundled_shared_train_test_split = 0
     do_oversample = 0
     include_zipcode_endpoint_enrich_columns = 0
-    include_estimated_cost = 0
-    do_zscore = 0
+    include_estimated_cost = 1
+    do_zscore = 1
 
-    include_geodata_columns = 0
+    include_geodata_columns = 1
     only_mainland_us = 0 # always keep 0 to keep chicago
     do_shared_train_test_split = 1
     drop_prelogged = 0
@@ -305,13 +305,20 @@ def dataclean(args):
 
     if include_geodata_columns:
         # add the geoenrichment data about the shipping routes
-        #file_name_route_data = "paths_geoenriched.csv"
-        #path_file_route_data = os.path.join(path_folder_data_raw, file_name_route_data)
-        #route_df = pd.read_csv(path_file_route_data)
-        route_df = shipping_routes_geodataclean.temp_build_routes_df(args, oa_orders)
+        try:
+            file_name_route_data = "paths_geoenriched.csv"
+            path_file_route_data = os.path.join(path_folder_data_temp, file_name_route_data)
+            route_df = pd.read_csv(path_file_route_data)
+        except:
+            oa_orders_ = oa_orders.copy()
+            oa_orders_[["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]] *= 1.0e6
+            route_df = shipping_routes_geodataclean.temp_build_routes_df(args, oa_orders_)
+            del oa_orders_
+        
         temp_foreign_key_column_names = ["REFERENCE_NUMBER"]
         oa_orders = oa_orders.merge(route_df,on=temp_foreign_key_column_names,how="left")
         shipping_route_geoenrichment_data_column_names = list(route_df.drop(columns=temp_foreign_key_column_names).columns)
+        print(oa_orders[shipping_route_geoenrichment_data_column_names].isnull().mean(axis=0))
         oa_orders_numerical_column_names += shipping_route_geoenrichment_data_column_names
 
     if include_distance_column:
@@ -541,6 +548,19 @@ def dataclean(args):
                 ('log_transform', FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
                 #('scaler', StandardScaler())
             ])
+    
+    if do_zscore:
+        # if do zscore is true, then add a standard scaler to all numerical columns 9numerical and loggable numerical) but excluding boolean column names
+        numerical_pipeline_1 = Pipeline([
+                    ('imputer', SimpleImputer(strategy='mean')),
+                    ('scaler', StandardScaler())
+                ])
+        numerical_pipeline_2 = Pipeline([
+                    ('imputer', SimpleImputer(strategy='mean')),
+                    ('log_transform', FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
+                    ('scaler', StandardScaler())
+                ])
+    
     numerical_transformer = ColumnTransformer(
         transformers=[
             ('num_0', numerical_pipeline_0, numerical_column_names_0),
@@ -732,7 +752,7 @@ def dataclean(args):
         ('preprocessor_pipeline', preprocessor),
         #('pca', PCA(n_components=10)),
         #('model',LogisticRegression(class_weight="balanced"))
-        ('model',RandomForestClassifier(10,class_weight="balanced"))
+        ('model',RandomForestClassifier(1,class_weight="balanced"))
     ])
 
     np.random.seed(1)
