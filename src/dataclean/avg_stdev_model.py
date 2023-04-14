@@ -120,7 +120,7 @@ def dataclean(args):
     include_estimated_cost = 1
     do_zscore = 1
 
-    include_geodata_columns = 1
+    include_geodata_columns = 0
     only_mainland_us = 0 # always keep 0 to keep chicago
     do_shared_train_test_split = 1
     drop_prelogged = 0
