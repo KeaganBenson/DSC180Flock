@@ -10,7 +10,7 @@
 
 # In[4]:
 
-
+import logging
 import os
 import numpy as np
 import pandas as pd
@@ -348,7 +348,25 @@ def dataclean_filter_ftl(oa_orders):
     print("removing rows in dataclean_filter_ftl")
     return oa_orders
 
+def dataclean_optional_only_mainland_us(oa_orders,
+                                Y_UPPER_BOUND = 6.5, 
+                                Y_LOWER_BOUND = 2.5, 
+                                X_UPPER_BOUND = -7, 
+                                X_LOWER_BOUND = -15 
+                               ):
+    """
+    Completely optional function that crops only the orders within the 48 mainland US States.
+    """
+    Y_UPPER_BOUND = 6.5 
+    Y_LOWER_BOUND = 2.5 
+    X_UPPER_BOUND = -7 
+    X_LOWER_BOUND = -15 
 
+    oa_orders = oa_orders[((oa_orders["X_COORD_ORIG"] >= X_LOWER_BOUND) & (oa_orders["X_COORD_ORIG"] <= X_UPPER_BOUND))]
+    oa_orders = oa_orders[((oa_orders["X_COORD_DEST"] >= X_LOWER_BOUND) & (oa_orders["X_COORD_DEST"] <= X_UPPER_BOUND))]
+    oa_orders = oa_orders[((oa_orders["Y_COORD_ORIG"] >= Y_LOWER_BOUND) & (oa_orders["Y_COORD_ORIG"] <= Y_UPPER_BOUND))]
+    oa_orders = oa_orders[((oa_orders["Y_COORD_DEST"] >= Y_LOWER_BOUND) & (oa_orders["Y_COORD_DEST"] <= Y_UPPER_BOUND))]
+    return oa_orders
 
 
 
@@ -568,9 +586,17 @@ def add_time_between_2_events_column(df,
 
     seconds_between_2_events_column = get_time_subtraction(df, end_time_column_name,start_time_column_name)
     df[column_name] = seconds_between_2_events_column
-    error_rows = df[df[column_name] <0] # rows with negative time
-    print("removing {0} negative duration rows".format(error_rows.shape[0]))
-    df = df[df[column_name] >=0]
+    return df
+def check_data_integrity_physical_quantitative_column(df, column_name, logger=None, drop=False):
+    #logger.info("duration column np.nan", np.mean(np.isnan(df[column_name])))
+    #logger.info("duration column np.inf", np.mean(np.isposinf(df[column_name])))
+    #logger.info("duration column -np.inf", np.mean(np.isneginf(df[column_name])))
+    #logger.info("duration column <0", np.mean((df[column_name] < 0)))
+    
+    df.loc[(df[column_name] < 0), column_name] = np.nan # rows with negative time
+    #print("removing {0} negative duration rows".format(error_rows.shape[0]))
+    if drop == True:
+        df = df[df[column_name] >= 0]
     return df
 def add_distance_column(df,
                         column_name="APPROXIMATE_DRIVING_ROUTE_MILEAGE",
@@ -762,6 +788,9 @@ def add_lead_time_column(oa, oa_offers, column_name = "LEAD_TIME", reference_num
     assert "ORDER_DATETIME_PST" in list(oa.columns)
     # get only the offers that were chosen
     oa_offers_delivered = oa_offers[oa_offers["LOAD_DELIVERED_FROM_OFFER"]==1]
+    #print(len(oa_offers_delivered))
+    #print(oa_offers[reference_number_column_name].drop_duplicates().shape[0])
+    #print(oa[reference_number_column_name].drop_duplicates().shape[0])
 
     # among these chosen offers, get the dates when they were offered by a carrier (CREATED_ON_HQ)
     oa_offers_delivered = oa_offers_delivered[[reference_number_column_name,"CREATED_ON_HQ"]]
@@ -770,7 +799,8 @@ def add_lead_time_column(oa, oa_offers, column_name = "LEAD_TIME", reference_num
     # this join should be 1-to-1 (i.e. no duplicate orders are created): recall that oa's row schema is orders (i.e. each row is a unique order)
     # while oa_offers_delivered should be also now of a row schema the moment we filtered only for the chosen offers
     # because each order can only have 1 chosen offer in the end
-    
+
+    #reference_number_column_name = "REFERENCE_NUMBER"
     oa = oa.merge(oa_offers_delivered, on=[reference_number_column_name])
     time_between_order_and_offer_column = get_time_subtraction(oa, "CREATED_ON_HQ","ORDER_DATETIME_PST")
     # get the time difference or duration between when the order was made and when the chosen offer was proposed
@@ -787,12 +817,21 @@ def add_lead_time_column(oa, oa_offers, column_name = "LEAD_TIME", reference_num
     zero_div_prevention = 0.0001
     lead_time_percentage_column =  time_between_order_and_offer_column/(time_between_order_and_deadline_column + zero_div_prevention)
     oa[column_name] = lead_time_percentage_column
+    return oa
 
+def check_data_integrity_percentage_column(oa, column_name,logger=None, drop=False):
     # final data cleaning of error rows
+
+    #logger.info("leadtime column np.nan {0}".format(np.mean(np.isnan(oa[column_name]))))
+    #logger.info("leadtime column np.inf", np.mean(np.isposinf(oa[column_name])))
+    #logger.info("leadtime column -np.inf", np.mean(np.isneginf(oa[column_name])))
+    #logger.info("leadtime column 0<=x<=1", np.mean((oa[column_name] >= 0) * (oa[column_name] <= 1)))
+
+
     oa[column_name] = oa[[column_name]].replace([np.inf, -np.inf], np.nan).values
-    oa = oa.dropna(subset=[column_name])
-    
-    oa = oa[((oa[column_name] >= 0) & (oa[column_name] <= 1))] # since lead_time is a percentage, any rows < 0 or > 1 are errors and must be dropped
+    oa.loc[~((oa[column_name] >= 0) & (oa[column_name] <= 1)), column_name] = np.nan # since lead_time is a percentage, any rows < 0 or > 1 are errors and must be dropped
+    if drop == True:
+        oa = oa[((oa[column_name] >= 0) & (oa[column_name] <= 1))]
     return oa
 
 

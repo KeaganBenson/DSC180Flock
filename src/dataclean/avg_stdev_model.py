@@ -26,7 +26,7 @@ from . import util
 from . import shipping_routes_geodataclean
 
 import sklearn
-#print(sklearn.__version__)
+#logger.info(sklearn.__version__)
 
 
 from sklearn.pipeline import Pipeline
@@ -53,6 +53,7 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 
 import os
+import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -60,40 +61,15 @@ plt.style.use("ggplot")
 from matplotlib import collections  as mc
 
 
-    
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
 
-def dataclean(args):
-    
-
-    """## Data File Reading"""
+def set_dp_params(args):
     path_folder = args["path_folder"]
     path_folder_data = args["path_folder_data"]
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
     path_folder_data_temp = os.path.join(path_folder_data,"temp")
     path_folder_data_final = os.path.join(path_folder_data,"final")
-
-    file_name_oa_offers = "offer_acceptance_offers.csv"
-    path_file_oa_offers = os.path.join(path_folder_data_raw, file_name_oa_offers)
-    print(path_file_oa_offers)
-    oa_offers = pd.read_csv(path_file_oa_offers)
-    print("Loaded offers df")
-    print(oa_offers.shape)
-
-    file_name_oa_orders = "offer_acceptance_orders.csv"
-    path_file_oa_orders = os.path.join(path_folder_data_raw, file_name_oa_orders)
-    print(path_file_oa_orders)
-    oa_orders = pd.read_csv(path_file_oa_orders)
-    print("Loaded orders df")
-    print(oa_orders.shape)
-
-    file_name_zipcode_coordinates = "zipcode_coordinates.csv"
-    path_file_zipcode_coordinates = os.path.join(path_folder_data_raw, file_name_zipcode_coordinates)
-    print(path_file_zipcode_coordinates)
-    zipcode_coordinates = pd.read_csv(path_file_zipcode_coordinates)
-    print("Loaded zipcodes df")
-    print(zipcode_coordinates.shape)
-
-    """## Data Cleaning"""
 
     # these are a bunch of binary 1/0 constants that are supposed to modify different conditions on how the
     # data-preparation is performed, and was simply used to try out different variations of EDA.
@@ -121,7 +97,7 @@ def dataclean(args):
     do_zscore = 1
 
     include_geodata_columns = 0
-    only_mainland_us = 0 # always keep 0 to keep chicago
+    only_mainland_us = 1 # always keep 0 to keep chicago
     do_shared_train_test_split = 1
     drop_prelogged = 0
     model_soph = 1
@@ -176,340 +152,610 @@ def dataclean(args):
         include_distance_over_duration_column = 0
         include_lead_time = 0
         weighing_by_lead_time = 0
+
+    dp_params = dict()
+    dp_params["include_lead_time"] = include_lead_time
+    dp_params["weighing_by_lead_time"] = weighing_by_lead_time
+    dp_params["revamp_weighing_by_lead_time"] = revamp_weighing_by_lead_time
+    dp_params["cut_off_lead_time"] = cut_off_lead_time
+    dp_params["include_outliers"] = include_outliers
+    dp_params["include_path_columns"] = include_path_columns
+    dp_params["include_sparse_orders"] = include_sparse_orders
+    dp_params["avoid_pooled_reference_numbers"] = avoid_pooled_reference_numbers
+    dp_params["filtering_ftl"] = filtering_ftl
+    dp_params["explode_references"] = explode_references
+    dp_params["do_pooled_model"] = do_pooled_model
+    dp_params["bundled_shared_train_test_split"] = bundled_shared_train_test_split
+    dp_params["do_oversample"] = do_oversample
+    dp_params["include_zipcode_endpoint_enrich_columns"] = include_zipcode_endpoint_enrich_columns
+    dp_params["include_estimated_cost"] = include_estimated_cost
+    dp_params["do_zscore"] = do_zscore
+
+    dp_params["include_geodata_columns"] = include_geodata_columns
+    dp_params["only_mainland_us"] = only_mainland_us
+    dp_params["do_shared_train_test_split"] = do_shared_train_test_split
+    dp_params["drop_prelogged"] = drop_prelogged
+    dp_params["model_soph"] = model_soph
+
+    dp_params["include_zipcode_coords_columns"] = include_zipcode_coords_columns
+    dp_params["include_metro_cluster_columns"] = include_metro_cluster_columns
+    dp_params["include_time_ohe_columns"] = include_time_ohe_columns
+    dp_params["include_distance_column"] = include_distance_column
+    dp_params["include_duration_column"] = include_duration_column
+    dp_params["include_distance_over_duration_column"] = include_distance_over_duration_column
+    dp_params["do_log"] = do_log
+    dp_params["do_ohe"] = do_ohe
+    dp_params["drop_preohe"] = drop_preohe
+    return dp_params
+class Temp_OA_Data_Cleaning:
+    def __init__(self, args):
+        self.args = args
+        self.column_names_metadata = dict()
+    def set_dag(self,dag):
+        self.dag = dag
+        return dag
+    def set_logger(self,logger):
+        self.logger = logger
+        return logger
+        
+    def set_dp_params(self,dp_params):
+        self.dp_params = dp_params
+        return dp_params
+    
+    def read_files(self):
+        logger = self.logger
+        args = self.args
+        """## Data File Reading"""
+        path_folder = args["path_folder"]
+        path_folder_data = args["path_folder_data"]
+        path_folder_data_raw = os.path.join(path_folder_data,"raw")
+        path_folder_data_temp = os.path.join(path_folder_data,"temp")
+        path_folder_data_final = os.path.join(path_folder_data,"final")
+
+        file_name_oa_offers = "offer_acceptance_offers.csv"
+        path_file_oa_offers = os.path.join(path_folder_data_raw, file_name_oa_offers)
+        oa_offers = pd.read_csv(path_file_oa_offers)
+        self.oa_offers = oa_offers
+
+        file_name_oa_orders = "offer_acceptance_orders.csv"
+        path_file_oa_orders = os.path.join(path_folder_data_raw, file_name_oa_orders)
+        oa_orders = pd.read_csv(path_file_oa_orders)
+        self.oa_orders = oa_orders
+
+
+        file_name_zipcode_coordinates = "zipcode_coordinates.csv"
+        path_file_zipcode_coordinates = os.path.join(path_folder_data_raw, file_name_zipcode_coordinates)
+        zipcode_coordinates = pd.read_csv(path_file_zipcode_coordinates)
+        self.zipcode_coordinates = zipcode_coordinates
+        self.logger = logger
         
 
 
-    # Part 1: data cleaning offers
-    # In this part, I'm just adding columns to the oa offers table
+    def dataclean_oa_offers(self):
+        logger = self.logger
+        args = self.args
+        """## Data File Reading"""
+        path_folder = args["path_folder"]
+        path_folder_data = args["path_folder_data"]
+        path_folder_data_raw = os.path.join(path_folder_data,"raw")
+        path_folder_data_temp = os.path.join(path_folder_data,"temp")
+        path_folder_data_final = os.path.join(path_folder_data,"final")
+        
+        # Part 1: data cleaning offers
+        # In this part, I'm just adding columns to the oa offers table
+        oa_offers = self.oa_offers
 
-    oa_offers_boolean_column_names = ['LOAD_DELIVERED_FROM_OFFER']
-    #oa_offers_boolean_column_names += ['SELF_SERVE', 'IS_OFFER_APPROVED','AUTOMATICALLY_APPROVED', 'MANUALLY_APPROVED', 'WAS_EVER_UNCOVERED','COVERING_OFFER', 'LOAD_DELIVERED_FROM_OFFER', 'RECOMMENDED_LOAD', 'VALID']
+        oa_offers_boolean_column_names = ['LOAD_DELIVERED_FROM_OFFER']
+        #oa_offers_boolean_column_names += ['SELF_SERVE', 'IS_OFFER_APPROVED','AUTOMATICALLY_APPROVED', 'MANUALLY_APPROVED', 'WAS_EVER_UNCOVERED','COVERING_OFFER', 'LOAD_DELIVERED_FROM_OFFER', 'RECOMMENDED_LOAD', 'VALID']
 
-    # Only a few columns are needed from the offers dataset:
-    # RATE_USD must be kept for the average rates
-    # LOAD_DELIVERED_FROM_OFFER must be kept for lead time
-    # CREATED_ON_HQ must be kept for lead time
-    # OFFER_TYPE must be kept for the pooled column
-    oa_offers_date_column_names = ["CREATED_ON_HQ"]
-    oa_offers_categorical_column_names = ["OFFER_TYPE"]
-    oa_offers_loggable_numerical_column_names = ["RATE_USD"]
-    oa_offers_numerical_column_names = []
-    oa_offers_ohe_column_names = []
-    oa_offers = util.add_cleaned_reference_numbers_column(oa_offers)
-    oa_offers = util.add_num_reference_numbers_column(oa_offers)
-    oa_offers = util.dataclean_pool_reference_numbers_discrepancy(oa_offers)
-
-
-    offer_type_is_pooled_column_name = "OFFER_TYPE_IS_POOLED"
-    oa_offers = util.add_offer_type_is_pooled_column(oa_offers,column_name=offer_type_is_pooled_column_name)
-    oa_offers_boolean_column_names += [offer_type_is_pooled_column_name]
-
-    oa_offers_selected_column_names = ["REFERENCE_NUMBER","REFERENCE_NUMBERS"]
-    oa_offers_selected_column_names += oa_offers_date_column_names # has CREATED_ON_HQ
-    oa_offers_selected_column_names += oa_offers_boolean_column_names # has LOAD_DELIVERED_FROM_OFFER and OFFER_TYPE_IS_POOLED
-    oa_offers_selected_column_names += oa_offers_loggable_numerical_column_names # has RATE_USD
-    oa_offers_selected_column_names += oa_offers_numerical_column_names # has nothing
-    oa_offers = oa_offers[oa_offers_selected_column_names]
-    # subsets the column names
-
-    for column_name in oa_offers_date_column_names: oa_offers = util.convert_pd_datetime_column(oa_offers, column_name);
-    for column_name in oa_offers_boolean_column_names: oa_offers = util.convert_boolean_to_num_column(oa_offers, column_name);
-    for column_name in oa_offers_loggable_numerical_column_names: oa_offers = util.add_log_column_to_df(oa_offers, column_name,drop_prelogged=False);
+        # Only a few columns are needed from the offers dataset:
+        # RATE_USD must be kept for the average rates
+        # LOAD_DELIVERED_FROM_OFFER must be kept for lead time
+        # CREATED_ON_HQ must be kept for lead time
+        # OFFER_TYPE must be kept for the pooled column
+        oa_offers_date_column_names = ["CREATED_ON_HQ"]
+        oa_offers_categorical_column_names = ["OFFER_TYPE"]
+        oa_offers_loggable_numerical_column_names = ["RATE_USD"]
+        oa_offers_numerical_column_names = []
+        oa_offers_ohe_column_names = []
+        oa_offers = util.add_cleaned_reference_numbers_column(oa_offers)
+        oa_offers = util.add_num_reference_numbers_column(oa_offers)
+        oa_offers = util.dataclean_pool_reference_numbers_discrepancy(oa_offers)
 
 
-    # Part 2: data cleaning orders
-    # In this part, I'm just adding columns to the oa orders table
+        offer_type_is_pooled_column_name = "OFFER_TYPE_IS_POOLED"
+        # add assert column that checks if offer_type is either pool or quote
+        oa_offers = util.add_offer_type_is_pooled_column(oa_offers,column_name=offer_type_is_pooled_column_name)
+        
+        oa_offers_boolean_column_names += [offer_type_is_pooled_column_name]
 
-    oa_orders_categorical_column_names = ["DELIVERY_TIME_CONSTRAINT","TRANSPORT_MODE"]
-    # column names contained in this categorical column names list are those that plan to be one-hot-encoded later on
-    oa_orders_ohe_column_names = []
-    oa_orders_boolean_column_names = ['FD_ENABLED', 'EXCLUSIVE_USE_REQUESTED','HAZARDOUS', 'REEFER_ALLOWED', 'STRAIGHT_TRUCK_ALLOWED','LOAD_TO_RIDE_REQUESTED']
-    # column names contained in this boolean column names list are those that will be treated as boolean
-    oa_orders_loggable_numerical_column_names = ["ESTIMATED_COST_AT_ORDER","PALLETIZED_LINEAR_FEET","LOAD_BAR_COUNT"]
-    # column names contained in this loggable numerical column names list are those that plan to be log-transformed later on
-    #if include_estimated_cost == 0: oa_orders_loggable_numerical_column_names.remove("ESTIMATED_COST_AT_ORDER");
-    
-    oa_orders_numerical_column_names = []
-    # column names contained in this numerical column names list are those that are numerical but shouldn't be log transformed
-    
-    oa_orders_date_column_names = ["ORDER_DATETIME_PST","PICKUP_DEADLINE_PST"] # ORDER_DATETIME_PST is necessary for lead time
+        oa_offers_selected_column_names = ["REFERENCE_NUMBER","REFERENCE_NUMBERS"]
+        oa_offers_selected_column_names += oa_offers_date_column_names # has CREATED_ON_HQ
+        oa_offers_selected_column_names += oa_offers_boolean_column_names # has LOAD_DELIVERED_FROM_OFFER and OFFER_TYPE_IS_POOLED
+        oa_offers_selected_column_names += oa_offers_loggable_numerical_column_names # has RATE_USD
+        oa_offers_selected_column_names += oa_offers_numerical_column_names # has nothing
+        oa_offers = oa_offers[oa_offers_selected_column_names]
+        # subsets the column names
+        # checks for nulls
 
+        # checks if convertable to datetime
+        for column_name in oa_offers_date_column_names:
+            oa_offers = util.convert_pd_datetime_column(oa_offers, column_name);
+        # checks if convertable to num
+        for column_name in oa_offers_boolean_column_names:
+            oa_offers = util.convert_boolean_to_num_column(oa_offers, column_name);
+        # checks if loggable
+        for column_name in oa_offers_loggable_numerical_column_names:
+            oa_offers = util.add_log_column_to_df(oa_offers, column_name,drop_prelogged=False);
 
-    zipcode_coordinates["X_COORD"] /= 1.0e6
-    zipcode_coordinates["Y_COORD"] /= 1.0e6
-    # dividing zipcode coordinates to tone down their scaling
+        self.oa_offers = oa_offers
+        self.logger = logger
 
-    #zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
-    # convert the zipcodes to be 3-digit, zeropadded strings
-    zipcode_coordinates["3DIGIT_ZIP"] = pd.to_numeric(zipcode_coordinates["3DIGIT_ZIP"], errors='coerce')
-    zipcode_coordinates.dropna(subset=["3DIGIT_ZIP"], inplace=True)    
-    oa_orders["ORIGIN_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["ORIGIN_3DIGIT_ZIP"], errors='coerce')
-    oa_orders.dropna(subset=["ORIGIN_3DIGIT_ZIP"], inplace=True)
-    oa_orders["DESTINATION_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["DESTINATION_3DIGIT_ZIP"], errors='coerce')
-    oa_orders.dropna(subset=["DESTINATION_3DIGIT_ZIP"], inplace=True)
-    zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int)
-    oa_orders["DESTINATION_3DIGIT_ZIP"] = oa_orders["DESTINATION_3DIGIT_ZIP"].astype(int)
-    oa_orders["ORIGIN_3DIGIT_ZIP"] = oa_orders["ORIGIN_3DIGIT_ZIP"].astype(int)
-    
-
-    if include_zipcode_coords_columns:
-        # adds 2 new columns to the orders dataset: X_COORD_DEST, Y_COORD_DEST, which are the x, y coordinates of the order's destination zipcode
-        # also adds their column names to the (not loggable) numerical column names 
-        oa_orders = (
-            oa_orders
-            .merge(zipcode_coordinates, left_on=["DESTINATION_3DIGIT_ZIP"], right_on=["3DIGIT_ZIP"])
-            .rename(columns={"X_COORD":"X_COORD_DEST","Y_COORD":"Y_COORD_DEST"})
-            .drop(columns=["3DIGIT_ZIP"])
-        )
-
-        # adds 2 new columns to the orders dataset: X_COORD_ORIG, Y_COORD_ORIG, which are the x, y coordinates of the order's origin zipcode
-        # also adds their column names to the (not loggable) numerical column names 
-        oa_orders = (
-            oa_orders
-            .merge(zipcode_coordinates, left_on=["ORIGIN_3DIGIT_ZIP"], right_on=["3DIGIT_ZIP"])
-            .rename(columns={"X_COORD":"X_COORD_ORIG","Y_COORD":"Y_COORD_ORIG"})
-            .drop(columns=["3DIGIT_ZIP"])
-        )
-        oa_orders_numerical_column_names += ["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]
-
-    if only_mainland_us == 1:
-        # Crops the dataset to exclude Hawaii and Alaska
-        Y_UPPER_BOUND = 6.5
-        Y_LOWER_BOUND = 2.5
-        X_UPPER_BOUND = -7
-        X_LOWER_BOUND = -15
-
-        oa_orders = oa_orders[((oa_orders["X_COORD_ORIG"] >= X_LOWER_BOUND) & (oa_orders["X_COORD_ORIG"] <= X_UPPER_BOUND))]
-        oa_orders = oa_orders[((oa_orders["X_COORD_DEST"] >= X_LOWER_BOUND) & (oa_orders["X_COORD_DEST"] <= X_UPPER_BOUND))]
-        oa_orders = oa_orders[((oa_orders["Y_COORD_ORIG"] >= Y_LOWER_BOUND) & (oa_orders["Y_COORD_ORIG"] <= Y_UPPER_BOUND))]
-        oa_orders = oa_orders[((oa_orders["Y_COORD_DEST"] >= Y_LOWER_BOUND) & (oa_orders["Y_COORD_DEST"] <= Y_UPPER_BOUND))]
-    if filtering_ftl:
-        # filters orders data so that the only rows have FTL for TRANSPORT_MODE
-        oa_orders = util.dataclean_filter_ftl(oa_orders)
-        # drop transport mode column from categorical column names list
-        # since all of the column names in categorical column names list are being planned to get one hot encoded
-        # and since TRANSPORT MODE would only be just FTL, that would accidentally create a 1-category one-hot-encoding, which we don't want 
-        oa_orders_categorical_column_names.remove("TRANSPORT_MODE")
+    def dataclean_oa_orders(self):
+        logger = self.logger
+        args = self.args
+        """## Data File Reading"""
+        path_folder = args["path_folder"]
+        path_folder_data = args["path_folder_data"]
+        path_folder_data_raw = os.path.join(path_folder_data,"raw")
+        path_folder_data_temp = os.path.join(path_folder_data,"temp")
+        path_folder_data_final = os.path.join(path_folder_data,"final")
+        
+        # Part 2: data cleaning orders
+        # In this part, I'm just adding columns to the oa orders table
+        oa_orders = self.oa_orders
 
 
-    # Matt said that any duplicate references is likely an error
-    oa_orders = util.dataclean_ftl_duplicate_references(oa_orders)
-    oa_orders = util.add_cleaned_reference_numbers_column(oa_orders)
+        zipcode_coordinates = self.zipcode_coordinates
 
-    if include_duration_column:
-        # adds a new column TIME_BETWEEN_ORDER_AND_DEADLINE to orders dataset, which is duration between order and pickup 
-        time_between_order_and_deadline_column_name = "TIME_BETWEEN_ORDER_AND_DEADLINE"
-        oa_orders = util.add_time_between_2_events_column(oa_orders,column_name=time_between_order_and_deadline_column_name)
-        oa_orders_loggable_numerical_column_names += [time_between_order_and_deadline_column_name]
-        #oa_orders_numerical_column_names += [time_between_order_and_deadline_column_name]
+        oa_orders_categorical_column_names = ["DELIVERY_TIME_CONSTRAINT","TRANSPORT_MODE"]
+        # column names contained in this categorical column names list are those that plan to be one-hot-encoded later on
+        oa_orders_ohe_column_names = []
+        oa_orders_boolean_column_names = ['FD_ENABLED', 'EXCLUSIVE_USE_REQUESTED','HAZARDOUS', 'REEFER_ALLOWED', 'STRAIGHT_TRUCK_ALLOWED','LOAD_TO_RIDE_REQUESTED']
+        # column names contained in this boolean column names list are those that will be treated as boolean
+        oa_orders_loggable_numerical_column_names = ["ESTIMATED_COST_AT_ORDER","PALLETIZED_LINEAR_FEET","LOAD_BAR_COUNT"]
+        # column names contained in this loggable numerical column names list are those that plan to be log-transformed later on
+        #if include_estimated_cost == 0: oa_orders_loggable_numerical_column_names.remove("ESTIMATED_COST_AT_ORDER");
+        
+        oa_orders_numerical_column_names = []
+        # column names contained in this numerical column names list are those that are numerical but shouldn't be log transformed
+        
+        oa_orders_date_column_names = ["ORDER_DATETIME_PST","PICKUP_DEADLINE_PST"] # ORDER_DATETIME_PST is necessary for lead time
+        for column_name in oa_orders_date_column_names:
+            oa_orders = util.convert_pd_datetime_column(oa_orders, column_name);
+        for column_name in oa_orders_boolean_column_names:
+            oa_orders = util.convert_boolean_to_num_column(oa_orders, column_name);
 
-    if include_geodata_columns:
-        # add the geoenrichment data about the shipping routes
+        zipcode_coordinates["X_COORD"] /= 1.0e6
+        zipcode_coordinates["Y_COORD"] /= 1.0e6
+        # dividing zipcode coordinates to tone down their scaling
+
+        #logger.info("oa_orders.shape", oa_orders.shape)
+
         try:
-            file_name_route_data = "paths_geoenriched.csv"
-            path_file_route_data = os.path.join(path_folder_data_temp, file_name_route_data)
-            route_df = pd.read_csv(path_file_route_data)
+            zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int).astype(str).str.zfill(3)
+            # convert the zipcodes to be 3-digit, zeropadded strings
         except:
-            oa_orders_ = oa_orders.copy()
-            oa_orders_[["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]] *= 1.0e6
-            route_df = shipping_routes_geodataclean.temp_build_routes_df(args, oa_orders_)
-            del oa_orders_
+            logger.info("\n row loss coerce")  
+            zipcode_coordinates["3DIGIT_ZIP"] = pd.to_numeric(zipcode_coordinates["3DIGIT_ZIP"], errors='coerce')
+            zipcode_coordinates.dropna(subset=["3DIGIT_ZIP"], inplace=True)    
+            oa_orders["ORIGIN_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["ORIGIN_3DIGIT_ZIP"], errors='coerce')
+            oa_orders.dropna(subset=["ORIGIN_3DIGIT_ZIP"], inplace=True)
+            oa_orders["DESTINATION_3DIGIT_ZIP"] = pd.to_numeric(oa_orders["DESTINATION_3DIGIT_ZIP"], errors='coerce')
+            oa_orders.dropna(subset=["DESTINATION_3DIGIT_ZIP"], inplace=True)
+            zipcode_coordinates["3DIGIT_ZIP"] = zipcode_coordinates["3DIGIT_ZIP"].astype(int)
+            oa_orders["DESTINATION_3DIGIT_ZIP"] = oa_orders["DESTINATION_3DIGIT_ZIP"].astype(int)
+            oa_orders["ORIGIN_3DIGIT_ZIP"] = oa_orders["ORIGIN_3DIGIT_ZIP"].astype(int)
+        #logger.info("oa_orders.shape", oa_orders.shape)
+
+
+
+
+
+
+        if self.dp_params["include_zipcode_coords_columns"] == 1:
+            # adds 2 new columns to the orders dataset: X_COORD_DEST, Y_COORD_DEST, which are the x, y coordinates of the order's destination zipcode
+            # also adds their column names to the (not loggable) numerical column names
+            join_type = "left"#"inner"
+            if join_type == "inner":
+                logger.info("\n row loss zipcoord join")    
+            oa_orders = (
+                oa_orders
+                .merge(zipcode_coordinates, left_on=["DESTINATION_3DIGIT_ZIP"], right_on=["3DIGIT_ZIP"],how=join_type)
+                .rename(columns={"X_COORD":"X_COORD_DEST","Y_COORD":"Y_COORD_DEST"})
+                .drop(columns=["3DIGIT_ZIP"])
+            )
+
+            # adds 2 new columns to the orders dataset: X_COORD_ORIG, Y_COORD_ORIG, which are the x, y coordinates of the order's origin zipcode
+            # also adds their column names to the (not loggable) numerical column names 
+            oa_orders = (
+                oa_orders
+                .merge(zipcode_coordinates, left_on=["ORIGIN_3DIGIT_ZIP"], right_on=["3DIGIT_ZIP"],how=join_type)
+                .rename(columns={"X_COORD":"X_COORD_ORIG","Y_COORD":"Y_COORD_ORIG"})
+                .drop(columns=["3DIGIT_ZIP"])
+            )
+            oa_orders_numerical_column_names += ["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]
+        #logger.info("oa_orders.shape", oa_orders.shape)
+
+        if self.dp_params["only_mainland_us"] == 1:
+            # Crops the dataset to exclude Hawaii and Alaska
+            logger.info("\n row loss mainland us")
+            oa_orders = util.dataclean_optional_only_mainland_us(oa_orders)
+        #logger.info("oa_orders.shape", oa_orders.shape)
+
+        if self.dp_params["filtering_ftl"] == 1:
+            # filters orders data so that the only rows have FTL for TRANSPORT_MODE
+            logger.info("\n row loss filter ftl")
+            oa_orders = util.dataclean_filter_ftl(oa_orders)
+            # drop transport mode column from categorical column names list
+            # since all of the column names in categorical column names list are being planned to get one hot encoded
+            # and since TRANSPORT MODE would only be just FTL, that would accidentally create a 1-category one-hot-encoding, which we don't want 
+            oa_orders_categorical_column_names.remove("TRANSPORT_MODE")
+        #logger.info("oa_orders.shape", oa_orders.shape)
+
+
+        logger.info("\n row loss drop duplicates keep false")
+        # Matt said that any duplicate references is likely an error
+        oa_orders = util.dataclean_ftl_duplicate_references(oa_orders)
+        oa_orders = oa_orders.drop_duplicates(subset=["REFERENCE_NUMBER"], keep=False)
+        #logger.info("oa_orders.shape", oa_orders.shape)
+
+
         
-        temp_foreign_key_column_names = ["REFERENCE_NUMBER"]
-        oa_orders = oa_orders.merge(route_df,on=temp_foreign_key_column_names,how="left")
-        shipping_route_geoenrichment_data_column_names = list(route_df.drop(columns=temp_foreign_key_column_names).columns)
-        print(oa_orders[shipping_route_geoenrichment_data_column_names].isnull().mean(axis=0))
-        oa_orders_numerical_column_names += shipping_route_geoenrichment_data_column_names
+        oa_orders = util.add_cleaned_reference_numbers_column(oa_orders)
 
-    if include_distance_column:
-        # adds a new column APPROXIMATE_DRIVING_ROUTE_MILEAGE to orders dataset, 
-        # which the euclidean distance between the x,y coordinates of origin and destination of order 
-        distance_column_name = "APPROXIMATE_DRIVING_ROUTE_MILEAGE"
-        oa_orders = util.add_distance_column(oa_orders,column_name=distance_column_name)
-        oa_orders_loggable_numerical_column_names += [distance_column_name]
+        if self.dp_params["include_duration_column"]:
+            # Python only
+            # adds a new column TIME_BETWEEN_ORDER_AND_DEADLINE to orders dataset, which is duration between order and pickup
+            logger.info("\n row loss duration")
+            time_between_order_and_deadline_column_name = "TIME_BETWEEN_ORDER_AND_DEADLINE"
+            oa_orders = util.add_time_between_2_events_column(oa_orders,column_name=time_between_order_and_deadline_column_name)
+            oa_orders = util.check_data_integrity_physical_quantitative_column(oa_orders, time_between_order_and_deadline_column_name,logger= logger)
+            oa_orders_loggable_numerical_column_names += [time_between_order_and_deadline_column_name]
+            #oa_orders_numerical_column_names += [time_between_order_and_deadline_column_name]
+        #logger.info("oa_orders.shape", oa_orders.shape)
 
-    if include_distance_over_duration_column:
-        # divides the log-transformed APPROXIMATE_DRIVING_ROUTE_MILEAGE by the log-transformed TIME_BETWEEN_ORDER_AND_DEADLINE
-        distance_over_order_time_column_name = "DISTANCE_OVER_ORDER_TIME"
-        oa_orders = util.add_distance_over_time_column(oa_orders,column_name=distance_over_order_time_column_name)
-        oa_orders_numerical_column_names += [distance_over_order_time_column_name]
-
-    if include_time_ohe_columns:
-        # adds time-based columns for one-hot-encoding.
-        # it specifically gets the month number, weekday number, and hour number, for the order datetime and deadline datetime 
-        # then appends the new column names to the categorical column names list, so that it will be processed for one-hot-encoding later
-        month_column_name = "DEADLINE_MONTH"
-        oa_orders = util.add_month_column(oa_orders, date_column_name="PICKUP_DEADLINE_PST", column_name=month_column_name)
-        oa_orders_categorical_column_names += [month_column_name]
-
-        weekday_column_name = "DEADLINE_DAY"
-        oa_orders = util.add_weekday_column(oa_orders, date_column_name="PICKUP_DEADLINE_PST", column_name=weekday_column_name)
-        oa_orders_categorical_column_names += [weekday_column_name]
-
-        hour_column_name = "DEADLINE_HOUR"
-        oa_orders = util.add_hour_column(oa_orders, date_column_name="PICKUP_DEADLINE_PST", column_name=hour_column_name)
-        oa_orders_categorical_column_names += [hour_column_name]
-
-        month_column_name = "ORDER_MONTH"
-        oa_orders = util.add_month_column(oa_orders, date_column_name="ORDER_DATETIME_PST", column_name=month_column_name)
-        oa_orders_categorical_column_names += [month_column_name]
-
-        weekday_column_name = "ORDER_DAY"
-        oa_orders = util.add_weekday_column(oa_orders, date_column_name="ORDER_DATETIME_PST", column_name=weekday_column_name)
-        oa_orders_categorical_column_names += [weekday_column_name]
-
-        hour_column_name = "ORDER_HOUR"
-        oa_orders = util.add_hour_column(oa_orders, date_column_name="ORDER_DATETIME_PST", column_name=hour_column_name)
-        oa_orders_categorical_column_names += [hour_column_name]
-
-    oa_orders_selected_column_names = ["REFERENCE_NUMBER","REFERENCE_NUMBERS","DESTINATION_3DIGIT_ZIP","ORIGIN_3DIGIT_ZIP"]
-    oa_orders_selected_column_names += oa_orders_date_column_names
-    oa_orders_selected_column_names += oa_orders_boolean_column_names
-    oa_orders_selected_column_names += oa_orders_loggable_numerical_column_names
-    oa_orders_selected_column_names += oa_orders_categorical_column_names
-    oa_orders_selected_column_names += oa_orders_numerical_column_names
-    oa_orders = oa_orders[oa_orders_selected_column_names]
-    # subsets the column names
-
-    for column_name in oa_orders_date_column_names: 
-        oa_orders = util.convert_pd_datetime_column(oa_orders, column_name);
-    for column_name in oa_orders_boolean_column_names: 
-        oa_orders = util.convert_boolean_to_num_column(oa_orders, column_name);
+        if self.dp_params["include_geodata_columns"]:
+            # add the geoenrichment data about the shipping routes
+            try:
+                file_name_route_data = "paths_geoenriched.csv"
+                path_file_route_data = os.path.join(path_folder_data_temp, file_name_route_data)
+                route_df = pd.read_csv(path_file_route_data)
+            except:
+                oa_orders_ = oa_orders.copy()
+                oa_orders_[["X_COORD_ORIG","Y_COORD_ORIG","X_COORD_DEST","Y_COORD_DEST"]] *= 1.0e6
+                route_df = shipping_routes_geodataclean.temp_build_routes_df(args, oa_orders_)
+                del oa_orders_
+            
+            temp_foreign_key_column_names = ["REFERENCE_NUMBER"]
+            oa_orders = oa_orders.merge(route_df,on=temp_foreign_key_column_names,how="left")
+            shipping_route_geoenrichment_data_column_names = list(route_df.drop(columns=temp_foreign_key_column_names).columns)
+            logger.info(oa_orders[shipping_route_geoenrichment_data_column_names].isnull().mean(axis=0))
+            oa_orders_numerical_column_names += shipping_route_geoenrichment_data_column_names
+        #logger.info("oa_orders.shape", oa_orders.shape)
 
 
-    # Part 3: Joining the oa_offers and oa_orders into a new table called oa
+        if self.dp_params["include_distance_column"]:
+            # SQL-friendly
+            # adds a new column APPROXIMATE_DRIVING_ROUTE_MILEAGE to orders dataset, 
+            # which the euclidean distance between the x,y coordinates of origin and destination of order 
+            distance_column_name = "APPROXIMATE_DRIVING_ROUTE_MILEAGE"
+            oa_orders = util.add_distance_column(oa_orders,column_name=distance_column_name)
+            oa_orders_loggable_numerical_column_names += [distance_column_name]
+
+        if self.dp_params["include_distance_over_duration_column"]:
+            # SQL-friendly
+            # divides the log-transformed APPROXIMATE_DRIVING_ROUTE_MILEAGE by the log-transformed TIME_BETWEEN_ORDER_AND_DEADLINE
+            distance_over_order_time_column_name = "DISTANCE_OVER_ORDER_TIME"
+            oa_orders = util.add_distance_over_time_column(oa_orders,column_name=distance_over_order_time_column_name)
+            oa_orders_numerical_column_names += [distance_over_order_time_column_name]
+
+        if self.dp_params["include_time_ohe_columns"]:
+            # Python only
+            # adds time-based columns for one-hot-encoding.
+            # it specifically gets the month number, weekday number, and hour number, for the order datetime and deadline datetime 
+            # then appends the new column names to the categorical column names list, so that it will be processed for one-hot-encoding later
+            month_column_name = "DEADLINE_MONTH"
+            oa_orders = util.add_month_column(oa_orders, date_column_name="PICKUP_DEADLINE_PST", column_name=month_column_name)
+            oa_orders_categorical_column_names += [month_column_name]
+
+            weekday_column_name = "DEADLINE_DAY"
+            oa_orders = util.add_weekday_column(oa_orders, date_column_name="PICKUP_DEADLINE_PST", column_name=weekday_column_name)
+            oa_orders_categorical_column_names += [weekday_column_name]
+
+            hour_column_name = "DEADLINE_HOUR"
+            oa_orders = util.add_hour_column(oa_orders, date_column_name="PICKUP_DEADLINE_PST", column_name=hour_column_name)
+            oa_orders_categorical_column_names += [hour_column_name]
+
+            month_column_name = "ORDER_MONTH"
+            oa_orders = util.add_month_column(oa_orders, date_column_name="ORDER_DATETIME_PST", column_name=month_column_name)
+            oa_orders_categorical_column_names += [month_column_name]
+
+            weekday_column_name = "ORDER_DAY"
+            oa_orders = util.add_weekday_column(oa_orders, date_column_name="ORDER_DATETIME_PST", column_name=weekday_column_name)
+            oa_orders_categorical_column_names += [weekday_column_name]
+
+            hour_column_name = "ORDER_HOUR"
+            oa_orders = util.add_hour_column(oa_orders, date_column_name="ORDER_DATETIME_PST", column_name=hour_column_name)
+            oa_orders_categorical_column_names += [hour_column_name]
 
 
-    # The offers data (oa_offers) and orders data (oa_orders) will be joined as follows:
-    # since orders to offers is one-to-many, the offers data needs to be groupby'd into a new table where each row corresponds to an order
-    # and THEN the orders and the offers-aggregation will be joined together.
-    # The offers-aggregation will bring the avg of the (log-transformed) rates, the stdev of the (log-transformed) rates, to the order
-    # the amount of offers per order will also be a new column
-
-    # both 2 tables will use the column REFERENCE_NUMBERS as the joining key
-    # Since REFERENCE_NUMBERS is actually a column where each value is a LIST of ids (in both tables), 
-    # it needs to be exploded using pandas explode before beinng joined (and for oa_offers, it needs to be exploded before the groupby, maybe)
-
-    log_rate_usd_column_name = "LOG(RATE_USD)"
-    rate_usd_column_name = "RATE_USD"
-    count_reference_numbers_column_name = "ORDER_OFFER_AMOUNT"
-    sd_log_rate_usd_column_name = "SD_LOG(RATE_USD)"
-    # adding a duplicate of the rates column to apply standard deviaton later on during the group by
-    oa_offers[sd_log_rate_usd_column_name] = oa_offers["RATE_USD"]
-    if "RATE_USD" in list(oa_offers.columns): oa_offers.drop(columns=["RATE_USD"],inplace=True)
-    # adding a column for offer amount to do count later on during the group by
-    oa_offers[count_reference_numbers_column_name] = 1
-
-    oa_orders = oa_orders.drop_duplicates(subset=["REFERENCE_NUMBER"])
-
-    if explode_references:
-        foreign_key_column_name = "REFERENCE_NUMBERS"
-        # Recall that in oa_orders, the column "REFERENCE_NUMBERS" are lists of reference number strings,
-        # But for the case of oa_orders, these lists are just 1 item, so exploding REFERENCE_NUMBERS is no different 
-        # than just doing oa_orders["REFERENCE_NUMBERS"] = oa_orders["REFERENCE_NUMBERS"].apply(lambda x: x[0])
-        assert (type(oa_orders["REFERENCE_NUMBERS"].values[0]) == list)
-        assert oa_orders["REFERENCE_NUMBERS"].apply(len).max() == 1
-        assert oa_orders["REFERENCE_NUMBERS"].apply(len).min() == 1
-        assert ((oa_orders["REFERENCE_NUMBERS"].apply(len)).sum() == oa_orders.shape[0])
-        oa_orders_exploded = oa_orders.explode(["REFERENCE_NUMBERS"])
-        assert ((oa_orders.shape[0] == oa_orders_exploded.shape[0])) 
-        # row count for the pre- and post-exploded references would be unchanged since the lists are just 1 item
-        assert (type(oa_orders_exploded["REFERENCE_NUMBERS"].values[0]) == str) 
-
-        # Recall that in oa_offers, the column "REFERENCE_NUMBERS" are lists of reference number strings
-        assert (type(oa_offers["REFERENCE_NUMBERS"].values[0]) == list)
-        # So we should apply the pandas explode function to the REFERENCE_NUMBERS column in oa_offers
-        oa_offers_exploded = oa_offers.explode(["REFERENCE_NUMBERS"])
-        # Now, oa_offers has more rows post_explosion, and reference numbers are now strings
-        assert (type(oa_offers_exploded["REFERENCE_NUMBERS"].values[0]) == str)
-        assert ((oa_offers["REFERENCE_NUMBERS"].apply(len)).sum() == oa_offers_exploded.shape[0])
-    else:
-        # else, join by the original reference number column 
-        foreign_key_column_name = "REFERENCE_NUMBER"
-        oa_offers_exploded = oa_offers
-        oa_orders_exploded = oa_orders
 
 
-    # this makes sure FTL and pool is mutually exclusive, but depending on if filtering_ftl was set to True, there are 2 differentways to do it
-    if filtering_ftl == 1:
-        oa_offers_exploded = oa_offers_exploded[oa_offers_exploded["OFFER_TYPE_IS_POOLED"]==0]
-    else:
-        oa_offers_exploded = oa_offers_exploded.merge(oa_orders_exploded[["TRANSPORT_MODE",foreign_key_column_name]],on=[foreign_key_column_name])
-        oa_offers_exploded = oa_offers_exploded[((oa_offers_exploded["TRANSPORT_MODE"]=="FTL") & (oa_offers_exploded["OFFER_TYPE_IS_POOLED"])!=1)]
-        oa_offers_exploded.drop(columns=["TRANSPORT_MODE"],inplace=True)
 
-    # now, the newly exploded oa_offers must be groupby'd on REFERENCE_NUMBERS to be in the same joinable level as oa orders
 
-    aggdict = dict()
-    aggdict[log_rate_usd_column_name] = np.mean 
-    aggdict[sd_log_rate_usd_column_name] = np.std # standard deviation
-    aggdict["OFFER_TYPE_IS_POOLED"] = np.mean
-    aggdict[count_reference_numbers_column_name] = np.sum
-    oa_offers_exploded_groupby = oa_offers_exploded.groupby([foreign_key_column_name],as_index=False).agg(aggdict)
-    oa_offers_exploded_groupby = oa_offers_exploded_groupby.fillna(0) # fixes any accidental nan's in the stdev
+        oa_orders_selected_column_names = ["REFERENCE_NUMBER","REFERENCE_NUMBERS","DESTINATION_3DIGIT_ZIP","ORIGIN_3DIGIT_ZIP"]
+        oa_orders_selected_column_names += oa_orders_date_column_names
+        oa_orders_selected_column_names += oa_orders_boolean_column_names
+        oa_orders_selected_column_names += oa_orders_loggable_numerical_column_names
+        oa_orders_selected_column_names += oa_orders_categorical_column_names
+        oa_orders_selected_column_names += oa_orders_numerical_column_names
+        oa_orders = oa_orders[oa_orders_selected_column_names]
+        # subsets the column names
 
-    temp_oa_orders = oa_orders_exploded
-    temp_oa_offers = oa_offers_exploded_groupby
-    oa = temp_oa_orders.merge(temp_oa_offers, on=[foreign_key_column_name])
+        #logger.info("oa_orders.shape", oa_orders.shape)
 
-    oa_boolean_column_names = []
-    oa_loggable_numerical_column_names = []
-    oa_numerical_column_names = []
-    oa_categorical_column_names = []
-    oa_ohe_column_names = []
+        
 
-    if include_metro_cluster_columns:
-        # adds the set of columns that encode the origin zipcode of an order to different metropolitan region groups
-        metro_cluster = util.temp_build_metro_cluster(oa)
-        metro_cluster.plot_map(path_folder=path_folder)
-        orig_proximity_column_names = ["ORIG_"+metro_cluster.group_column_name+"="+str(i) for i in range(metro_cluster.group_amount)]
-        orig_metro_cluster_columns = util.temp_build_metro_cluster_columns(oa, metro_cluster,"X_COORD_ORIG","Y_COORD_ORIG",orig_proximity_column_names)
-        oa = util.add_metro_cluster_columns(oa, orig_metro_cluster_columns)
-        oa_numerical_column_names += orig_proximity_column_names
+        self.oa_orders = oa_orders
+        self.column_names_metadata["oa_orders"] = {
+            "loggable": oa_orders_loggable_numerical_column_names,
+            "numerical": oa_orders_numerical_column_names,
+            "boolean": oa_orders_boolean_column_names,
+            "categorical": oa_orders_categorical_column_names,
+            "ohe": oa_orders_ohe_column_names,
+            }
 
-        # adds the set of columns that encode the destination zipcode of an order to different metropolitan region groups
-        dest_proximity_column_names = ["DEST_"+metro_cluster.group_column_name+"="+str(i) for i in range(metro_cluster.group_amount)]
-        dest_metro_cluster_columns = util.temp_build_metro_cluster_columns(oa, metro_cluster,"X_COORD_DEST","Y_COORD_DEST",dest_proximity_column_names)
-        oa = util.add_metro_cluster_columns(oa, dest_metro_cluster_columns)
-        oa_numerical_column_names += dest_proximity_column_names
+        self.logger = logger
 
-    lead_time_column_name = "LEAD_TIME"
-    weight_column_name = None
-    if include_lead_time == True:
-        # adds the lead time percentage column to the data to be used for sample_weights or normalization for the model
-        # note that the lead-time column WON'T be a feature used in the input matrix used to train the model itself in the function fit, but rather for the
-        # sample_weights argument
-        assert "CREATED_ON_HQ" in list(oa_offers_exploded.columns)
-        assert "LOAD_DELIVERED_FROM_OFFER" in list(oa_offers_exploded.columns)
-        oa = util.add_lead_time_column(oa, oa_offers_exploded, 
-                                       column_name=lead_time_column_name,
-                                       reference_number_column_name=foreign_key_column_name)
-    if weighing_by_lead_time == True:
-        weight_column_name = lead_time_column_name
+    def dataclean_oa(self):
+        # Part 3: Joining the oa_offers and oa_orders into a new table called oa
 
-    # necessary for path visualizations, which have a LOG(ORDER_OFFER_AMOUNT) column name
-    #oa = util.add_log_column_to_df(oa, count_reference_numbers_column_name, drop_prelogged=False)
 
-    # Optional factors. All of these can only be done after oa join
-    if include_sparse_orders == 0:
-        # reduces the dataset to only have orders with more than 5 offers
-        oa = oa[oa["ORDER_OFFER_AMOUNT"]>=5]
+        # The offers data (oa_offers) and orders data (oa_orders) will be joined as follows:
+        # since orders to offers is one-to-many, the offers data needs to be groupby'd into a new table where each row corresponds to an order
+        # and THEN the orders and the offers-aggregation will be joined together.
+        # The offers-aggregation will bring the avg of the (log-transformed) rates, the stdev of the (log-transformed) rates, to the order
+        # the amount of offers per order will also be a new column
 
-    if cut_off_lead_time != 0:
-        # reduces the dataset to only have orders with a lead_time percentage greater than or equal to 'cut_off_lead_time', which is set to 50%
-        oa = oa[oa["LEAD_TIME"]>=cut_off_lead_time]
-        _ = plt.hist(oa["LEAD_TIME"])
-    if include_outliers == 0:
-        # reduces the dataset to not have any orders with a large outlier offer amount
-        oa = oa[oa["ORDER_OFFER_AMOUNT"]<=20]
+        # both 2 tables will use the column REFERENCE_NUMBERS as the joining key
+        # Since REFERENCE_NUMBERS is actually a column where each value is a LIST of ids (in both tables), 
+        # it needs to be exploded using pandas explode before beinng joined (and for oa_offers, it needs to be exploded before the groupby, maybe)
+        logger = self.logger
 
-    # At this point, no more new columns should be added to oa,
-    # Any changes to oa's column schema at this point should only be about DROPPING columns
+        args = self.args
+        """## Data File Reading"""
+        path_folder = args["path_folder"]
+        path_folder_data = args["path_folder_data"]
+        path_folder_data_raw = os.path.join(path_folder_data,"raw")
+        path_folder_data_temp = os.path.join(path_folder_data,"temp")
+        path_folder_data_final = os.path.join(path_folder_data,"final")
+        
+        oa_offers = self.oa_offers
+        oa_orders = self.oa_orders
+
+
+        log_rate_usd_column_name = "LOG(RATE_USD)"
+        rate_usd_column_name = "RATE_USD"
+        count_reference_numbers_column_name = "ORDER_OFFER_AMOUNT"
+        sd_log_rate_usd_column_name = "SD_LOG(RATE_USD)"
+        # adding a duplicate of the rates column to apply standard deviaton later on during the group by
+        oa_offers[sd_log_rate_usd_column_name] = oa_offers["RATE_USD"]
+        oa_offers.drop(columns=["RATE_USD"],inplace=True)
+        
+        # adding a column for offer amount to do count later on during the group by
+        oa_offers[count_reference_numbers_column_name] = 1
+        
+        if self.dp_params["explode_references"] == 1:
+            foreign_key_column_name = "REFERENCE_NUMBERS"
+            # Recall that in oa_orders, the column "REFERENCE_NUMBERS" are lists of reference number strings,
+            # But for the case of oa_orders, these lists are just 1 item, so exploding REFERENCE_NUMBERS is no different 
+            # than just doing oa_orders["REFERENCE_NUMBERS"] = oa_orders["REFERENCE_NUMBERS"].apply(lambda x: x[0])
+            assert (type(oa_orders["REFERENCE_NUMBERS"].values[0]) == list)
+            assert oa_orders["REFERENCE_NUMBERS"].apply(len).max() == 1
+            assert oa_orders["REFERENCE_NUMBERS"].apply(len).min() == 1
+            assert ((oa_orders["REFERENCE_NUMBERS"].apply(len)).sum() == oa_orders.shape[0])
+            oa_orders_exploded = oa_orders.explode(["REFERENCE_NUMBERS"])
+            assert ((oa_orders.shape[0] == oa_orders_exploded.shape[0])) 
+            # row count for the pre- and post-exploded references would be unchanged since the lists are just 1 item
+            assert (type(oa_orders_exploded["REFERENCE_NUMBERS"].values[0]) == str) 
+
+            # Recall that in oa_offers, the column "REFERENCE_NUMBERS" are lists of reference number strings
+            assert (type(oa_offers["REFERENCE_NUMBERS"].values[0]) == list)
+            # So we should apply the pandas explode function to the REFERENCE_NUMBERS column in oa_offers
+            oa_offers_exploded = oa_offers.explode(["REFERENCE_NUMBERS"])
+            # Now, oa_offers has more rows post_explosion, and reference numbers are now strings
+            assert (type(oa_offers_exploded["REFERENCE_NUMBERS"].values[0]) == str)
+            assert ((oa_offers["REFERENCE_NUMBERS"].apply(len)).sum() == oa_offers_exploded.shape[0])
+        else:
+            # else, join by the original reference number column 
+            foreign_key_column_name = "REFERENCE_NUMBER"
+            oa_offers_exploded = oa_offers
+            oa_orders_exploded = oa_orders
+
+        #logger.info("oa_offers_exploded.shape", oa_offers_exploded.shape)
+
+        # this makes sure FTL and pool is mutually exclusive, but depending on if filtering_ftl was set to True, there are 2 differentways to do it
+        if self.dp_params["filtering_ftl"] == 1:
+            oa_offers_exploded = oa_offers_exploded[oa_offers_exploded["OFFER_TYPE_IS_POOLED"]==0]
+        else:
+            logger.info("\n row loss explode merge for transport mode")
+            oa_offers_exploded = oa_offers_exploded.merge(oa_orders_exploded[["TRANSPORT_MODE",foreign_key_column_name]],on=[foreign_key_column_name])
+            #logger.info("oa_offers_exploded.shape", oa_offers_exploded.shape)
+            logger.info("\n row loss mutex ftl pool")
+            oa_offers_exploded = oa_offers_exploded[((oa_offers_exploded["TRANSPORT_MODE"]=="FTL") & (oa_offers_exploded["OFFER_TYPE_IS_POOLED"])!=1)]
+            oa_offers_exploded.drop(columns=["TRANSPORT_MODE"],inplace=True)
+        #logger.info("oa_offers_exploded.shape", oa_offers_exploded.shape)
+
+
+        # re-aggregate the exploded offers table
+        
+        # now, the newly exploded oa_offers must be groupby'd on REFERENCE_NUMBERS to be in the same joinable level as oa orders
+        aggdict = dict()
+        aggdict[log_rate_usd_column_name] = np.mean 
+        aggdict[sd_log_rate_usd_column_name] = np.std # standard deviation
+        aggdict["OFFER_TYPE_IS_POOLED"] = np.mean
+        aggdict[count_reference_numbers_column_name] = np.sum
+
+        oa_offers_exploded_groupby = oa_offers_exploded.groupby([foreign_key_column_name],as_index=False).agg(aggdict)
+        oa_offers_exploded_groupby = oa_offers_exploded_groupby.fillna(0) # fixes any accidental nan's in the stdev
+
+        # create the oa table
+        temp_oa_orders = oa_orders_exploded
+        temp_oa_offers = oa_offers_exploded_groupby
+        #logger.info("\n\n temp_oa_orders.shape", temp_oa_orders.shape)
+        #join_type = "inner"
+        join_type = "left"
+        if join_type == "inner":
+            logger.info("\n row loss merge orders with offers")
+        oa = temp_oa_orders.merge(temp_oa_offers, on=[foreign_key_column_name],how=join_type)
+        #logger.info("temp_oa_orders.shape", oa.shape)
+
+        # set up the column name metadata for oa
+        
+        oa_boolean_column_names = []
+        oa_loggable_numerical_column_names = []
+        oa_numerical_column_names = []
+        oa_categorical_column_names = []
+        oa_ohe_column_names = []
+
+        # add metro cluster columns
+
+        #logger.info("oa.shape", oa.shape)
+
+        if self.dp_params["include_metro_cluster_columns"] == 1:
+            # adds the set of columns that encode the origin zipcode of an order to different metropolitan region groups
+            metro_cluster = util.temp_build_metro_cluster(oa)
+            metro_cluster.plot_map(path_folder=path_folder)
+            orig_proximity_column_names = ["ORIG_"+metro_cluster.group_column_name+"="+str(i) for i in range(metro_cluster.group_amount)]
+            orig_metro_cluster_columns = util.temp_build_metro_cluster_columns(oa, metro_cluster,"X_COORD_ORIG","Y_COORD_ORIG",orig_proximity_column_names)
+            logger.info("\n row loss metro cluster 1")
+            oa = util.add_metro_cluster_columns(oa, orig_metro_cluster_columns)
+            #logger.info("oa.shape", oa.shape)
+
+            oa_numerical_column_names += orig_proximity_column_names
+
+            # adds the set of columns that encode the destination zipcode of an order to different metropolitan region groups
+            dest_proximity_column_names = ["DEST_"+metro_cluster.group_column_name+"="+str(i) for i in range(metro_cluster.group_amount)]
+            dest_metro_cluster_columns = util.temp_build_metro_cluster_columns(oa, metro_cluster,"X_COORD_DEST","Y_COORD_DEST",dest_proximity_column_names)
+            logger.info("\n row loss metro cluster 2")
+            oa = util.add_metro_cluster_columns(oa, dest_metro_cluster_columns)
+            #logger.info("oa.shape", oa.shape)
+            oa_numerical_column_names += dest_proximity_column_names
+
+
+        # manage lead-time
+
+
+        lead_time_column_name = "LEAD_TIME"
+        weight_column_name = None
+        if self.dp_params["include_lead_time"] == 1:
+            # adds the lead time percentage column to the data to be used for sample_weights or normalization for the model
+            # note that the lead-time column WON'T be a feature used in the input matrix used to train the model itself in the function fit, but rather for the
+            # sample_weights argument
+            assert "CREATED_ON_HQ" in list(oa_offers_exploded.columns)
+            assert "LOAD_DELIVERED_FROM_OFFER" in list(oa_offers_exploded.columns)
+            logger.info("\n row loss leadtime")
+            oa = util.add_lead_time_column(oa, oa_offers_exploded, 
+                                           column_name=lead_time_column_name,
+                                           reference_number_column_name=foreign_key_column_name)
+            oa = util.check_data_integrity_percentage_column(oa, lead_time_column_name,logger=logger, drop=True)
+            oa[lead_time_column_name] = oa[lead_time_column_name].fillna(0)
+            #logger.info("oa.shape", oa.shape)
+        if self.dp_params["weighing_by_lead_time"] == 1:
+            weight_column_name = lead_time_column_name
+        self.weight_column_name = weight_column_name
+
+
+
+
+
+
+        # Optional factors. All of these can only be done after oa join
+        if self.dp_params["include_sparse_orders"] == 0:
+            # reduces the dataset to only have orders with more than 5 offers
+            oa = oa[oa["ORDER_OFFER_AMOUNT"]>=5]
+
+        if self.dp_params["cut_off_lead_time"] > 0:
+            # reduces the dataset to only have orders with a lead_time percentage greater than or equal to 'cut_off_lead_time', which is set to 50%
+            oa = oa[oa["LEAD_TIME"]>=cut_off_lead_time]
+            _ = plt.hist(oa["LEAD_TIME"])
+        if self.dp_params["include_outliers"] == 0:
+            # reduces the dataset to not have any orders with a large outlier offer amount
+            oa = oa[oa["ORDER_OFFER_AMOUNT"]<=20]
+
+        # necessary for path visualizations, which have a LOG(ORDER_OFFER_AMOUNT) column name
+        #oa = util.add_log_column_to_df(oa, count_reference_numbers_column_name, drop_prelogged=False)
+
+        # At this point, no more new columns should be added to oa,
+        # Any changes to oa's column schema at this point should only be about DROPPING columns
+
+
+        
+
+        path_folder_data = self.args["path_folder_data"]
+        if "test" in path_folder_data:
+            oa = pd.concat([oa for _ in range(1000)],axis=0).sample(frac=1).reset_index(drop=True)
+            #logger.info("new stacked oa shape", oa.shape)
+        self.oa = oa
+        self.column_names_metadata["oa"] = {
+            "loggable": oa_loggable_numerical_column_names,
+            "numerical": oa_numerical_column_names,
+            "boolean": oa_boolean_column_names,
+            "categorical": oa_categorical_column_names,
+            "ohe": oa_ohe_column_names,
+            }
+
+        #assert False
+    
+        self.logger = logger
+
 
     
-    if "test" in path_folder_data:
-        oa = pd.concat([oa for _ in range(1000)],axis=0).sample(frac=1).reset_index(drop=True)
-        print("new stacked oa shape", oa.shape)
+
+
+
+
+
+
+
+
+
+def dataclean(args):
+
+    """## Data File Reading"""
+    path_folder = args["path_folder"]
+    path_folder_data = args["path_folder_data"]
+    path_folder_data_raw = os.path.join(path_folder_data,"raw")
+    path_folder_data_temp = os.path.join(path_folder_data,"temp")
+    path_folder_data_final = os.path.join(path_folder_data,"final")
+
+    dp_params = set_dp_params(args)
+
+    logging.basicConfig(filename=os.path.join(path_folder,'generated_visualizations','logged.txt'),level=logging.INFO, format='%(asctime)s %(levelname)s:%(message)s')
+
+    #print(logger)
+    logger = logging.getLogger()
+
+    temp_oa_data_cleaning = Temp_OA_Data_Cleaning(args)
+    temp_oa_data_cleaning.set_logger(logger)
+    temp_oa_data_cleaning.set_dp_params(dp_params)
+    temp_oa_data_cleaning.read_files()
+    temp_oa_data_cleaning.dataclean_oa_offers()
+    temp_oa_data_cleaning.dataclean_oa_orders()
+    temp_oa_data_cleaning.dataclean_oa()
+    logger = temp_oa_data_cleaning.logger
+
+    oa = temp_oa_data_cleaning.oa
+    
+    column_names_metadata = temp_oa_data_cleaning.column_names_metadata
+    oa_numerical_column_names = column_names_metadata["oa"]["numerical"]
+    oa_orders_boolean_column_names = column_names_metadata["oa_orders"]["boolean"]
+    oa_orders_numerical_column_names = column_names_metadata["oa_orders"]["numerical"]
+    oa_orders_loggable_numerical_column_names = column_names_metadata["oa_orders"]["loggable"]
+    oa_orders_categorical_column_names = column_names_metadata["oa_orders"]["categorical"]
+    weight_column_name = temp_oa_data_cleaning.weight_column_name
+
 
     # part 4: the model building and training 
 
@@ -536,9 +782,14 @@ def dataclean(args):
     numerical_column_names_1 = oa_numerical_column_names + oa_orders_numerical_column_names
     numerical_column_names_2 = oa_orders_loggable_numerical_column_names
     categorical_column_names_0 = oa_orders_categorical_column_names
+    
     numerical_pipeline_0 = Pipeline([
                 ('imputer', SimpleImputer(strategy='constant', fill_value=0)),
             ])
+    # wait, imputing by zeros for booleans doesn't make sense,
+    numerical_pipeline_0 = Pipeline([('imputer', SimpleImputer(strategy='mean'))])
+
+
     numerical_pipeline_1 = Pipeline([
                 ('imputer', SimpleImputer(strategy='mean')),
                 #('scaler', StandardScaler())
@@ -549,7 +800,7 @@ def dataclean(args):
                 #('scaler', StandardScaler())
             ])
     
-    if do_zscore:
+    if dp_params["do_zscore"] == 1:
         # if do zscore is true, then add a standard scaler to all numerical columns 9numerical and loggable numerical) but excluding boolean column names
         numerical_pipeline_1 = Pipeline([
                     ('imputer', SimpleImputer(strategy='mean')),
@@ -621,7 +872,7 @@ def dataclean(args):
     y_train = y.loc[temp_train_test_indexer == 1]
     X_test = X.loc[temp_train_test_indexer == 0]
     y_test = y.loc[temp_train_test_indexer == 0]
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         X_train_weight_column = X_train[weight_column_name]
         X_train.drop(columns=[weight_column_name],inplace=True)
         X_test.drop(columns=[weight_column_name],inplace=True)
@@ -629,15 +880,15 @@ def dataclean(args):
 
 
     # weigh by lead time (if applicable)
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         fit_params = {"model__sample_weight":X_train_weight_column}
-        #print(cross_val_score(avg_pipeline,X_train,y_train,fit_params=fit_params))
+        #logger.info(cross_val_score(avg_pipeline,X_train,y_train,fit_params=fit_params))
         avg_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
     else:
-        #print(cross_val_score(avg_pipeline,X_train,y_train))
+        #logger.info(cross_val_score(avg_pipeline,X_train,y_train))
         avg_pipeline.fit(X_train,y_train)
     predictions = avg_pipeline.predict(X_test)
-    print("CorrCoef of Avg Model:",np.corrcoef(y_test,predictions)[0][1])
+    logger.info("\n CorrCoef of Avg Model: {0}".format(str(np.corrcoef(y_test,predictions)[0][1])))
 
     # scatterplot
     fig, ax = plt.subplots(figsize=(10,5))
@@ -678,34 +929,34 @@ def dataclean(args):
     sd_X = X
     sd_median = np.median(input_df[target_column_name])
     y = (input_df[target_column_name]>sd_median).astype(int)
-    print("sd_median:",sd_median)
-    #print(np.mean(input_df[target_column_name]>sd_median))
-    #print(np.mean(input_df[target_column_name]==0))
+    logger.info("\n sd_median: {0}".format(str(sd_median)))
+    #logger.info(np.mean(input_df[target_column_name]>sd_median))
+    #logger.info(np.mean(input_df[target_column_name]==0))
     
 
     X_train = X.loc[temp_train_test_indexer == 1]
     y_train = y.loc[temp_train_test_indexer == 1]
     X_test = X.loc[temp_train_test_indexer == 0]
     y_test = y.loc[temp_train_test_indexer == 0]
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         X_train_weight_column = X_train[weight_column_name]
         X_train.drop(columns=[weight_column_name],inplace=True)
         X_test.drop(columns=[weight_column_name],inplace=True)
 
 
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         fit_params = {"model__sample_weight":X_train_weight_column}
-        #print(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),fit_params=fit_params,scoring="roc_auc"))
+        #logger.info(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),fit_params=fit_params,scoring="roc_auc"))
         sd_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
     else:
-        #print(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),scoring="roc_auc"))
+        #logger.info(cross_val_score(sd_pipeline,X_train,y_train,cv=StratifiedKFold(n_splits=4,shuffle=True),scoring="roc_auc"))
         sd_pipeline.fit(X_train,y_train)
 
     predictions = sd_pipeline.predict(X_test)
-    print("Accuracy of StDev Model:", np.mean(predictions==y_test))
-    print("StDev Model Confusion Matrix:")
-    print(confusion_matrix(y_test,predictions,normalize="true"))
-    print("ROC AUC Score of StDev Model:", roc_auc_score(y_test,predictions))
+    logger.info("\n Accuracy of StDev Model: {0}".format(str(np.mean(predictions==y_test))))
+    logger.info("\n StDev Model Confusion Matrix:")
+    logger.info("\n "+str(np.matrix(confusion_matrix(y_test,predictions,normalize="true"))))
+    logger.info("\n ROC AUC Score of StDev Model: {0}".format(str(roc_auc_score(y_test,predictions))))
 
     # PCA
     preprocessed_X = preprocessor_pipeline.transform(sd_X)
@@ -742,7 +993,7 @@ def dataclean(args):
 ##                perm_diffs.append(perm_diff)
 ##
 ##            p_value = np.mean(perm_diffs>=observed_diff)
-##            print(numerical_column_name, "P-value:", p_value)
+##            logger.info(numerical_column_name, "P-value:", p_value)
         
 
 
@@ -767,25 +1018,25 @@ def dataclean(args):
     num_X = X
     num_median = np.median(input_df[target_column_name])
     y = (input_df[target_column_name]>num_median).astype(int)
-    print("num_median:",num_median)
+    logger.info("num_median: {0}".format(str(num_median)))
     X_train = X.loc[temp_train_test_indexer == 1]
     y_train = y.loc[temp_train_test_indexer == 1]
     X_test = X.loc[temp_train_test_indexer == 0]
     y_test = y.loc[temp_train_test_indexer == 0]
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         X_train_weight_column = X_train[weight_column_name]
         X_train.drop(columns=[weight_column_name],inplace=True)
         X_test.drop(columns=[weight_column_name],inplace=True)
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         fit_params = {"model__sample_weight":X_train_weight_column}
         num_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
     else:
         num_pipeline.fit(X_train,y_train)
     predictions = num_pipeline.predict(X_test)
-    print("Accuracy of Num Model:", np.mean(predictions==y_test))
-    print("Num Model Confusion Matrix:")
-    print(confusion_matrix(y_test,predictions,normalize="true"))
-    print("ROC AUC Score of Num Model:", roc_auc_score(y_test,predictions))
+    logger.info("\n "+"Accuracy of Num Model: {0}".format(str(np.mean(predictions==y_test))))
+    logger.info("\n "+"Num Model Confusion Matrix:")
+    logger.info("\n "+str(np.matrix(confusion_matrix(y_test,predictions,normalize="true"))))
+    logger.info("\n "+"ROC AUC Score of Num Model: {0}".format(str(roc_auc_score(y_test,predictions))))
 
     # PCA
     preprocessed_X = preprocessor_pipeline.transform(num_X)
@@ -819,25 +1070,25 @@ def dataclean(args):
     pooled_X = X
     pooled_median = np.median(input_df[target_column_name])
     y = (input_df[target_column_name]>pooled_median).astype(int)
-    print("pooled_median:",pooled_median)
+    logger.info("pooled_median: {0}".format(str(pooled_median)))
     X_train = X.loc[temp_train_test_indexer == 1]
     y_train = y.loc[temp_train_test_indexer == 1]
     X_test = X.loc[temp_train_test_indexer == 0]
     y_test = y.loc[temp_train_test_indexer == 0]
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         X_train_weight_column = X_train[weight_column_name]
         X_train.drop(columns=[weight_column_name],inplace=True)
         X_test.drop(columns=[weight_column_name],inplace=True)
-    if weighing_by_lead_time:
+    if dp_params["weighing_by_lead_time"] == 1:
         fit_params = {"model__sample_weight":X_train_weight_column}
         pooled_pipeline.fit(X_train,y_train,model__sample_weight=X_train_weight_column)
     else:
         pooled_pipeline.fit(X_train,y_train)
     predictions = pooled_pipeline.predict(X_test)
-    print("Accuracy of Pooled Model:", np.mean(predictions==y_test))
-    print("Pooled Model Confusion Matrix:")
-    print(confusion_matrix(y_test,predictions,normalize="true"))
-    print("ROC AUC Score of Pooled Model:", roc_auc_score(y_test,predictions))
+    logger.info("\n "+"Accuracy of Pooled Model: {0}".format(str(np.mean(predictions==y_test))))
+    logger.info("\n "+"Pooled Model Confusion Matrix:")
+    logger.info("\n "+str(np.matrix(confusion_matrix(y_test,predictions,normalize="true"))))
+    logger.info("\n "+"ROC AUC Score of Pooled Model: {0}".format(str( roc_auc_score(y_test,predictions))))
     # PCA
     preprocessed_X = preprocessor_pipeline.transform(pooled_X)
     Z = PCA(2).fit_transform(preprocessed_X)
@@ -854,11 +1105,10 @@ def dataclean(args):
     util.plot_model_pipeline_feature_importances(pooled_pipeline, path_folder, 'pooled_model_feature_importances.png')
 
 
-    #print(list(X.columns))
+    #logger.info(list(X.columns))
 
 
     
-    #assert False
 
 
     get_sd_by_tier = np.vectorize(lambda x: sd_median*int(x))
