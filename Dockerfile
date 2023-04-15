@@ -22,7 +22,7 @@ USER jovyan
 
 # RUN conda install -y babypandas geopandas
 
-RUN pip install --no-cache-dir geopandas numpy pandas matplotlib scipy scikit-learn bs4 requests seaborn gdown shapely apache-airflow spatialite boto3 jinja2 duckdb cenpy
+RUN pip install --no-cache-dir geopandas numpy pandas matplotlib scipy scikit-learn bs4 requests seaborn gdown shapely apache-airflow spatialite boto3 jinja2 duckdb cenpy sodapy
 
 # Override command to disable running jupyter notebook at launch
 CMD ["/bin/bash"]
