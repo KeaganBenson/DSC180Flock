@@ -85,13 +85,13 @@ def delete_shapefile_folder(path_folder_shapefile):
             os.remove(file)
     os.rmdir(path_folder_shapefile)
 
-def zipcode_geospatial_data_preparation(path_zipcode_shapefile):
+def zipcode_geospatial_data_preparation(gdf):
     '''
     Function that does all of the geospatial data preparation for zipcode coordinates
     It takes in the zipcode shapefile, and gets the xy coordinates for each zipcode
 
     Args:
-    path_zipcode_shapefile (str): the path to the shapefile
+    gdf (GeoDataFrame): gdf
 
     Returns:
     GeoDataFrame: the dataframe with 3 columns - the zipcode, and the x and y coordinates.
@@ -103,7 +103,7 @@ def zipcode_geospatial_data_preparation(path_zipcode_shapefile):
     pseudo_mercator = 3857
     # see https://en.wikipedia.org/wiki/Web_Mercator_projection
 
-    gdf = gpd.read_file(path_zipcode_shapefile, include_fields=["FID",gdf_zipcode_column_name])
+    
     # the original zipcode column is a length 5 string of numbers (front-zeropadded)
     # but the zipcodes in matt's orders dataset are only the first 3 digits of the zipcode
     # so we add a new column that crops out 5digit zipcode to 3digits so it's usable as a foreign key
@@ -138,24 +138,57 @@ def zipcode_geospatial_data_preparation(path_zipcode_shapefile):
 def do_etl_zipcoords(args):
     path_folder_data = args["path_folder_data"]
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
-    # zipcodes
-    url_shapefile_location = "https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.2020.html"
-    folder_zipcode_shapefile = "zipcodes_temp_geodata\\"
-    file_name_zipcoords = "zipcode_coordinates.csv"
+    try:
+        import pandas as pd
+        from sodapy import Socrata
 
-    path_folder_zipcode_shapefile = create_shapefile_folder(path_folder_data_raw, folder_zipcode_shapefile)
+        # Unauthenticated client only works with public data sets. Note 'None'
+        # in place of application token, and no username or password:
+        # Example authenticated client (needed for non-public datasets):
+        apptoken = "i7Q2t7NxfLdwov2PK0emgU1f2"
+        username = "bduongjqo@gmail.com"
+        password = "R0mce+on1"
+        client = Socrata("evergreen.data.socrata.com",
+                          apptoken,
+                          username=username,
+                          password=password)
 
-    page = requests.get(url_shapefile_location)
-    soup = BeautifulSoup(page.text, 'html.parser')
-    shapefile_download_href = get_zipcode_shapefile_download_href(soup)
-    download_extract_shapefile_href_to_folder(shapefile_download_href, path_folder_zipcode_shapefile)
-    zipcode_general_file_name = get_general_file_name(shapefile_download_href)
-    zipcode_shapefile_name = get_shapefile_name(zipcode_general_file_name)
-    path_zipcode_shapefile = get_path_shapefile(path_folder_zipcode_shapefile, zipcode_shapefile_name)
-    zipcoords = zipcode_geospatial_data_preparation(path_zipcode_shapefile)
-    path_file_zipcoords = os.path.join(path_folder_data_raw,file_name_zipcoords)
-    zipcoords.to_csv(path_file_zipcoords, index=False)
-    delete_shapefile_folder(path_folder_zipcode_shapefile)
+        # First 2000 results, returned as JSON from API / converted to Python list of
+        # dictionaries by sodapy.
+        results = client.get("3bfy-58gg",limit=50_000)
+
+
+        # Convert to pandas DataFrame
+        results_df = pd.DataFrame.from_records(results)
+        results_df.rename(columns={"zcta5ce10":"ZCTA5CE20","":"the_geom":"geometry"},inplace=True)
+        gdf = geopandas.GeoDataFrame(df, geometry='geometry')
+        zipcoords = zipcode_geospatial_data_preparation(gdf)
+        file_name_zipcoords = "zipcode_coordinates.csv"
+
+        path_file_zipcoords = os.path.join(path_folder_data_raw,file_name_zipcoords)
+        zipcoords.to_csv(path_file_zipcoords, index=False)
+    except:
+        # zipcodes
+        url_shapefile_location = "https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.2020.html"
+        folder_zipcode_shapefile = "zipcodes_temp_geodata\\"
+        file_name_zipcoords = "zipcode_coordinates.csv"
+
+        path_folder_zipcode_shapefile = create_shapefile_folder(path_folder_data_raw, folder_zipcode_shapefile)
+
+        page = requests.get(url_shapefile_location)
+        soup = BeautifulSoup(page.text, 'html.parser')
+        shapefile_download_href = get_zipcode_shapefile_download_href(soup)
+        download_extract_shapefile_href_to_folder(shapefile_download_href, path_folder_zipcode_shapefile)
+        zipcode_general_file_name = get_general_file_name(shapefile_download_href)
+        zipcode_shapefile_name = get_shapefile_name(zipcode_general_file_name)
+        path_zipcode_shapefile = get_path_shapefile(path_folder_zipcode_shapefile, zipcode_shapefile_name)
+
+        gdf_zipcode_column_name = "ZCTA5CE20"
+        gdf = gpd.read_file(path_zipcode_shapefile, include_fields=["FID",gdf_zipcode_column_name])
+        zipcoords = zipcode_geospatial_data_preparation(gdf)
+        path_file_zipcoords = os.path.join(path_folder_data_raw,file_name_zipcoords)
+        zipcoords.to_csv(path_file_zipcoords, index=False)
+        delete_shapefile_folder(path_folder_zipcode_shapefile)
 
 def do_etl_counties(args):
     path_folder_data = args["path_folder_data"]
