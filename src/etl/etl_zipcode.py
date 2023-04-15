@@ -139,7 +139,6 @@ def do_etl_zipcoords(args):
     path_folder_data = args["path_folder_data"]
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
     try:
-        import pandas as pd
         from sodapy import Socrata
 
         # Unauthenticated client only works with public data sets. Note 'None'
@@ -161,7 +160,8 @@ def do_etl_zipcoords(args):
         # Convert to pandas DataFrame
         results_df = pd.DataFrame.from_records(results)
         results_df.rename(columns={"zcta5ce10":"ZCTA5CE20","the_geom":"geometry"},inplace=True)
-        gdf = gpd.GeoDataFrame(df, geometry='geometry')
+        print("Extracted {0} zipcodes".format(str(results_df.shape[0]))
+        gdf = gpd.GeoDataFrame(results_df, geometry='geometry')
         zipcoords = zipcode_geospatial_data_preparation(gdf)
         file_name_zipcoords = "zipcode_coordinates.csv"
 
