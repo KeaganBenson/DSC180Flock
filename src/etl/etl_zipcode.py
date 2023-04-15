@@ -144,9 +144,9 @@ def do_etl_zipcoords(args):
         # Unauthenticated client only works with public data sets. Note 'None'
         # in place of application token, and no username or password:
         # Example authenticated client (needed for non-public datasets):
-        apptoken = "i7Q2t7NxfLdwov2PK0emgU1f2"
-        username = "bduongjqo@gmail.com"
-        password = "R0mce+on1"
+        apptoken = "APPTOKEN"
+        username = "USERNAME"
+        password = "PASSWORD"
         client = Socrata("evergreen.data.socrata.com",
                           apptoken,
                           username=username,
