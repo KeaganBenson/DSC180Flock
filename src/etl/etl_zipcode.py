@@ -160,7 +160,7 @@ def do_etl_zipcoords(args):
         # Convert to pandas DataFrame
         results_df = pd.DataFrame.from_records(results)
         results_df.rename(columns={"zcta5ce10":"ZCTA5CE20","the_geom":"geometry"},inplace=True)
-        print("Extracted {0} zipcodes".format(str(results_df.shape[0]))
+        print("Extracted {0} zipcodes".format(str(results_df.shape[0])))
         gdf = gpd.GeoDataFrame(results_df, geometry='geometry')
         zipcoords = zipcode_geospatial_data_preparation(gdf)
         file_name_zipcoords = "zipcode_coordinates.csv"
