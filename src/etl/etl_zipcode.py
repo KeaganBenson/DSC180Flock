@@ -160,14 +160,15 @@ def do_etl_zipcoords(args):
 
         # Convert to pandas DataFrame
         results_df = pd.DataFrame.from_records(results)
-        results_df.rename(columns={"zcta5ce10":"ZCTA5CE20","":"the_geom":"geometry"},inplace=True)
+        results_df.rename(columns={"zcta5ce10":"ZCTA5CE20","the_geom":"geometry"},inplace=True)
         gdf = geopandas.GeoDataFrame(df, geometry='geometry')
         zipcoords = zipcode_geospatial_data_preparation(gdf)
         file_name_zipcoords = "zipcode_coordinates.csv"
 
         path_file_zipcoords = os.path.join(path_folder_data_raw,file_name_zipcoords)
         zipcoords.to_csv(path_file_zipcoords, index=False)
-    except:
+    except Exception as e: 
+        print(e)
         # zipcodes
         url_shapefile_location = "https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.2020.html"
         folder_zipcode_shapefile = "zipcodes_temp_geodata\\"
