@@ -72,6 +72,7 @@ def get_county_weather_data(args):
     folder_name_county_weather_data = "county_weather_data"
     zipped_folder_name_county_weather_data = "county_weather_data.zip"
     county_weather_data_google_drive_url = "https://drive.google.com/file/d/19gdziTpRmPo2iCCOI2BLwm79eOnM89Be/view?usp=sharing"
+    county_weather_data_google_drive_url = "https://drive.google.com/file/d/1lIKQvEVC6yJ5pUMdIjapbsRdIiRJeKLx/view?usp=sharing"
 
     path_zipped_folder_county_weather_data = os.path.join(path_folder_data_raw,zipped_folder_name_county_weather_data)
     path_folder_county_weather_data = os.path.join(path_folder_data_raw,folder_name_county_weather_data)
@@ -95,6 +96,7 @@ def get_county_census_data(args):
     path_folder_data_raw = os.path.join(path_folder_data,"raw")
     folder_name_county_census_data = "county_census_data"
     file_name_county_census_data = "county_census_data.xlsx"
+    county_census_data_google_drive_url = "https://docs.google.com/spreadsheets/d/1-U0ZA8b1sYI1RlUIIvik_PELOz92TQaR/edit?usp=sharing&ouid=118247173478054444170&rtpof=true&sd=true"
     county_census_data_google_drive_url = "https://docs.google.com/spreadsheets/d/1-U0ZA8b1sYI1RlUIIvik_PELOz92TQaR/edit?usp=sharing&ouid=118247173478054444170&rtpof=true&sd=true"
     
     path_folder_county_census_data = os.path.join(path_folder_data_raw,folder_name_county_census_data)
